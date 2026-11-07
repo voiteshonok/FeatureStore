@@ -3,6 +3,8 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+/.cursor
+
 # C extensions
 *.so
 
@@ -148,6 +150,10 @@ activemq-data/
 
 # SageMath parsed files
 *.sage.py
+
+# Secrets and local Node installs
+secrets/
+node_modules/
 
 # Environments
 .env

@@ -1,0 +1,38 @@
+[project]
+name = "feature-store"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "schemas",
+    "simulator",
+    "ingestion",
+    "features",
+    "detection",
+    "gateway",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+addopts = ["--import-mode=importlib"]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = [
+    "libs/schemas",
+    "simulator",
+    "services/*",
+]
+
+[tool.uv.sources]
+schemas = { workspace = true }
+simulator = { workspace = true }
+ingestion = { workspace = true }
+features = { workspace = true }
+detection = { workspace = true }
+gateway = { workspace = true }

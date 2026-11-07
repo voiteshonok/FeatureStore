@@ -1,0 +1,107 @@
+[project]
+name = "feature-store"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "schemas",
+    "simulator",
+    "ingestion",
+    "features",
+    "detection",
+    "gateway",
+]
+
+[dependency-groups]
+dev = [
+    "clickhouse-connect>=1.12.0",
+    "kafka-python>=3.0.13",
+    "mypy>=1.13",
+    "pre-commit>=4.0",
+    "psycopg[binary]>=3.3.8",
+    "pydantic>=2.0",
+    "pytest>=8.0",
+    "pytest-cov>=6.0",
+    "redis>=8.1.0",
+    "ruff>=0.8",
+    "testcontainers[clickhouse,kafka,postgres,redis]>=4.15.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = [
+    "libs/schemas/tests",
+    "simulator/tests",
+    "services/ingestion/tests",
+    "services/features/tests",
+    "services/detection/tests",
+    "services/gateway/tests",
+]
+markers = [
+    "integration: tests that require running infrastructure",
+]
+addopts = [
+    "--import-mode=importlib",
+    "--cov=libs/schemas/src",
+    "--cov=simulator/src",
+    "--cov=services/ingestion/src",
+    "--cov=services/features/src",
+    "--cov=services/detection/src",
+    "--cov=services/gateway/src",
+    "--cov-fail-under=70",
+]
+
+[tool.coverage.report]
+fail_under = 70
+show_missing = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = [
+    "libs/schemas/src",
+    "simulator/src",
+    "services/ingestion/src",
+    "services/features/src",
+    "services/detection/src",
+    "services/gateway/src",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "ASYNC"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S101"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+explicit_package_bases = true
+mypy_path = [
+    "libs/schemas/src",
+    "simulator/src",
+    "services/ingestion/src",
+    "services/features/src",
+    "services/detection/src",
+    "services/gateway/src",
+]
+exclude = [
+    "(?x)(^(\\.venv|\\.git|\\.mypy_cache|\\.ruff_cache|\\.pytest_cache)/|(^|/)tests/)",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = [
+    "libs/schemas",
+    "simulator",
+    "services/*",
+]
+
+[tool.uv.sources]
+schemas = { workspace = true }
+simulator = { workspace = true }
+ingestion = { workspace = true }
+features = { workspace = true }
+detection = { workspace = true }
+gateway = { workspace = true }

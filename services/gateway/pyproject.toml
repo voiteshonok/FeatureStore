@@ -1,0 +1,11 @@
+[project]
+name = "gateway"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "schemas",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.17,<0.12.0"]
+build-backend = "uv_build"

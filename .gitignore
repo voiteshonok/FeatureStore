@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 
 /.cursor
+AGENTS.md
 
 # C extensions
 *.so

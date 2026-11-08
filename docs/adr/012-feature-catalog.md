@@ -1,8 +1,8 @@
 # ADR-012: Feature catalog as code
 
-## Status
-
-Accepted
+- **Status:** Accepted
+- **Date:** 2026-11-08
+- **Related:** G3, P3; ADR-000
 
 ## Context
 
@@ -19,6 +19,11 @@ event acceptance horizon from ADR-000.
 
 Adding or changing a feature is an edit to this catalog (and this ADR if the
 contract changes), not to each consumer.
+
+## Alternatives considered
+
+- **Duplicating names and windows in each service** — additions and changes drift
+  between the worker, the API, the parity check and the dashboard (G3, P3).
 
 ## Consequences
 

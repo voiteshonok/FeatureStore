@@ -147,6 +147,26 @@ services:
         limits:
           memory: 512m
 
+  simulator:
+    profiles: ["sim"]
+    build:
+      context: ..
+      dockerfile: simulator/Dockerfile
+    depends_on:
+      ingestion:
+        condition: service_healthy
+    command:
+      [
+        "--tps",
+        "200",
+        "--duration",
+        "10m",
+        "--seed",
+        "42",
+        "--url",
+        "http://ingestion:8000",
+      ]
+
 secrets:
   hmac_key:
     file: ../secrets/hmac_key

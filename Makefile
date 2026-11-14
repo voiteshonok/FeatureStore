@@ -2,7 +2,7 @@ COMPOSE := docker compose -f infra/docker-compose.yml
 KAFKA_BOOTSTRAP := localhost:9092
 KAFKA_TOPICS := /opt/kafka/bin/kafka-topics.sh
 
-.PHONY: up down logs ps topics secret lint typecheck test test-int clean openapi
+.PHONY: up down logs ps topics secret lint typecheck test test-int clean openapi pan-scan
 
 up:
 	$(COMPOSE) up -d --wait kafka postgres redis clickhouse
@@ -45,6 +45,9 @@ test-int:
 
 openapi:
 	uv run python -c "from ingestion.app import export_openapi; export_openapi('docs/openapi/ingestion.json')"
+
+pan-scan:
+	PYTHONPATH=tools uv run python -m pan_scan
 
 clean:
 	$(COMPOSE) down -v

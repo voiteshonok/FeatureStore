@@ -2,7 +2,7 @@ COMPOSE := docker compose -f infra/docker-compose.yml
 KAFKA_BOOTSTRAP := localhost:9092
 KAFKA_TOPICS := /opt/kafka/bin/kafka-topics.sh
 
-.PHONY: up down logs ps topics secret lint typecheck test test-int clean openapi pan-scan
+.PHONY: up down logs ps topics secret lint typecheck test test-int test-e2e clean openapi pan-scan
 
 up:
 	$(COMPOSE) up -d --wait kafka postgres redis clickhouse
@@ -38,10 +38,13 @@ typecheck:
 	uv run mypy .
 
 test:
-	uv run pytest -m "not integration"
+	uv run pytest -m "not integration and not e2e"
 
 test-int:
 	uv run pytest -m integration
+
+test-e2e:
+	uv run pytest -m e2e --no-cov
 
 openapi:
 	uv run python -c "from ingestion.app import export_openapi; export_openapi('docs/openapi/ingestion.json')"

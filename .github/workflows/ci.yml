@@ -26,7 +26,7 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --locked
-      - run: uv run pytest -m "not integration"
+      - run: uv run pytest -m "not integration and not e2e"
 
   integration:
     runs-on: ubuntu-latest

@@ -39,10 +39,12 @@ testpaths = [
     "services/detection/tests",
     "services/gateway/tests",
     "tools/pan_scan/tests",
+    "tests/e2e",
 ]
 pythonpath = ["tools"]
 markers = [
     "integration: tests that require running infrastructure",
+    "e2e: end-to-end tests against the compose stack",
 ]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"

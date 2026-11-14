@@ -1,0 +1,37 @@
+n_cards: 3000000
+n_merchants: 5000
+bin: "411111"
+pan_length: 16
+zipf_alpha: 1.2
+tps: 200
+card_home_sigma_km: 2
+merchant_sigma_km: 3
+amount_log_mean: 7.6
+amount_log_sigma: 0.6
+decline_rate_mean: 0.05
+decline_rate_min: 0.01
+decline_rate_max: 0.2
+duplicate_rate: 0.01
+late_short_rate: 0.02
+late_short_min_s: 1
+late_short_max_s: 60
+late_long_rate: 0.001
+late_long_min_s: 60
+late_long_max_s: 82800
+retry_rate: 0.3
+cities:
+  - name: Berlin
+    lat: 52.52
+    lon: 13.405
+  - name: Paris
+    lat: 48.8566
+    lon: 2.3522
+  - name: Madrid
+    lat: 40.4168
+    lon: -3.7038
+  - name: Rome
+    lat: 41.9028
+    lon: 12.4964
+  - name: Amsterdam
+    lat: 52.3676
+    lon: 4.9041

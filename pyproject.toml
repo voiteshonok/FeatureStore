@@ -38,7 +38,9 @@ testpaths = [
     "services/features/tests",
     "services/detection/tests",
     "services/gateway/tests",
+    "tools/pan_scan/tests",
 ]
+pythonpath = ["tools"]
 markers = [
     "integration: tests that require running infrastructure",
 ]
@@ -69,6 +71,7 @@ src = [
     "services/features/src",
     "services/detection/src",
     "services/gateway/src",
+    "tools",
 ]
 
 [tool.ruff.lint]
@@ -90,13 +93,14 @@ mypy_path = [
     "services/features/src",
     "services/detection/src",
     "services/gateway/src",
+    "tools",
 ]
 exclude = [
     "(?x)(^(\\.venv|\\.git|\\.mypy_cache|\\.ruff_cache|\\.pytest_cache)/|(^|/)tests/)",
 ]
 
 [[tool.mypy.overrides]]
-module = ["aiokafka", "aiokafka.*"]
+module = ["aiokafka", "aiokafka.*", "kafka", "kafka.*"]
 ignore_missing_imports = true
 
 [tool.uv]

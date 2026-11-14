@@ -21,6 +21,7 @@ dev = [
     "psycopg[binary]>=3.3.8",
     "pydantic>=2.0",
     "pytest>=8.0",
+    "pytest-asyncio>=0.25",
     "pytest-cov>=6.0",
     "redis>=8.1.0",
     "ruff>=0.8",
@@ -39,6 +40,8 @@ testpaths = [
 markers = [
     "integration: tests that require running infrastructure",
 ]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 addopts = [
     "--import-mode=importlib",
     "--cov=libs/schemas/src",
@@ -88,6 +91,10 @@ mypy_path = [
 exclude = [
     "(?x)(^(\\.venv|\\.git|\\.mypy_cache|\\.ruff_cache|\\.pytest_cache)/|(^|/)tests/)",
 ]
+
+[[tool.mypy.overrides]]
+module = ["aiokafka", "aiokafka.*"]
+ignore_missing_imports = true
 
 [tool.uv]
 package = false

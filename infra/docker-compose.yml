@@ -114,6 +114,43 @@ services:
         limits:
           memory: 1g
 
+  ingestion:
+    build:
+      context: ..
+      dockerfile: services/ingestion/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      DATABASE_URL: postgresql://${POSTGRES_USER:-featurestore}:${POSTGRES_PASSWORD:-featurestore}@postgres:5432/${POSTGRES_DB:-featurestore}
+    secrets:
+      - hmac_key
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready')",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+secrets:
+  hmac_key:
+    file: ../secrets/hmac_key
+
 volumes:
   kafka-data:
   redis-data:

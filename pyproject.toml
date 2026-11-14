@@ -14,6 +14,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "clickhouse-connect>=1.12.0",
+    "httpx>=0.27",
     "hypothesis>=6.170.15",
     "kafka-python>=3.0.13",
     "mypy>=1.13",

@@ -137,6 +137,27 @@ async def test_publish_timeout_raises_publish_error() -> None:
     assert isinstance(exc_info.value.__cause__, TimeoutError)
 
 
+async def test_ready_follows_the_metadata_refresh() -> None:
+    publisher = KafkaPublisher("127.0.0.1:9092")
+
+    async def refresh(updated: bool) -> bool:
+        return updated
+
+    try:
+        publisher._producer.client.force_metadata_update = lambda: refresh(True)  # type: ignore[method-assign]
+        assert await publisher.ready() is True
+        publisher._producer.client.force_metadata_update = lambda: refresh(False)  # type: ignore[method-assign]
+        assert await publisher.ready() is False
+
+        async def broken() -> bool:
+            raise RuntimeError("down")
+
+        publisher._producer.client.force_metadata_update = broken  # type: ignore[method-assign]
+        assert await publisher.ready() is False
+    finally:
+        await publisher.aclose()
+
+
 async def test_publish_broker_error_raises_publish_error() -> None:
     publisher = KafkaPublisher("127.0.0.1:9092", ack_timeout_s=1)
     event = _event()

@@ -47,6 +47,17 @@ class KafkaPublisher:
         """Connect to the cluster and obtain a producer id."""
         await self._producer.start()
 
+    async def ready(self) -> bool:
+        """Return whether the broker answers a metadata refresh."""
+        try:
+            updated = await asyncio.wait_for(
+                self._producer.client.force_metadata_update(),
+                timeout=1,
+            )
+        except Exception:
+            return False
+        return bool(updated)
+
     async def aclose(self) -> None:
         """Stop the producer. A dead broker does not block shutdown."""
         if self._closed:

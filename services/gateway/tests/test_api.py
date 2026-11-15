@@ -1,0 +1,233 @@
+"""API keys, rate limits, correlation, and the static health check."""
+
+import json
+import logging
+import sys
+from pathlib import Path
+from uuid import UUID
+
+import httpx
+import pytest
+from harness import make_settings, mount, ok_json, send
+
+from gateway.api import export_openapi
+from gateway.logging import JsonFormatter
+from gateway.settings import Settings, parse_api_keys
+
+
+def test_parse_api_keys_splits_on_the_first_colon() -> None:
+    assert parse_api_keys(" scoring:k1 , dashboard:ab:cd ") == {
+        "k1": "scoring",
+        "ab:cd": "dashboard",
+    }
+    assert parse_api_keys(" , ") == {}
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["scoring", "scoring:", ":secret", "scoring:k1,scoring:k2", "scoring:k1,dashboard:k1"],
+)
+def test_parse_api_keys_rejects_bad_entries(raw: str) -> None:
+    with pytest.raises(ValueError, match="client:key|unique"):
+        parse_api_keys(raw)
+
+
+def test_settings_reject_an_unparsable_rate() -> None:
+    with pytest.raises(ValueError):
+        Settings(api_keys={}, rate_limit="often")
+
+
+def test_settings_from_env_uses_the_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GATEWAY_API_KEYS", raising=False)
+    monkeypatch.delenv("GATEWAY_RATE_LIMIT", raising=False)
+    monkeypatch.delenv("FEATURES_URL", raising=False)
+    monkeypatch.delenv("DETECTION_URL", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    settings = Settings.from_env()
+    assert settings.rate_limit == "100/second"
+    assert settings.api_keys == {}
+    assert settings.features_url == "http://localhost:8001"
+    assert settings.detection_url == "http://localhost:8002"
+
+
+def test_json_formatter_includes_request_fields() -> None:
+    record = logging.LogRecord(
+        name="gateway",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="request",
+        args=(),
+        exc_info=None,
+    )
+    record.request_id = "trace-1"
+    record.client = "scoring"
+    record.method = "POST"
+    record.path = "/v1/features"
+    record.status = 200
+    record.latency_ms = 3
+    payload = json.loads(JsonFormatter().format(record))
+    assert payload["message"] == "request"
+    assert payload["request_id"] == "trace-1"
+    assert payload["client"] == "scoring"
+    assert payload["status"] == 200
+    assert payload["latency_ms"] == 3
+    assert "exception" not in payload
+
+    try:
+        raise OSError("down")
+    except OSError:
+        record.exc_info = sys.exc_info()
+    failed = json.loads(JsonFormatter().format(record))
+    assert "OSError" in str(failed["exception"])
+
+
+async def test_missing_key_is_401_and_unknown_key_is_403() -> None:
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(200, json={"ok": True})
+
+    gateway = await mount(handler)
+    try:
+        missing = await send(gateway.app, "POST", "/v1/features", api_key=None, content=b"{}")
+        unknown = await send(gateway.app, "POST", "/v1/features", api_key="nope", content=b"{}")
+        allowed = await send(gateway.app, "POST", "/v1/features", content=b"{}")
+    finally:
+        await gateway.aclose()
+
+    assert missing.status_code == 401
+    assert missing.json() == {"detail": "missing api key"}
+    assert unknown.status_code == 403
+    assert unknown.json() == {"detail": "unknown api key"}
+    assert allowed.status_code == 200
+    assert len(calls) == 1
+    assert "x-api-key" not in {key.lower() for key in calls[0].headers}
+
+
+async def test_health_does_not_check_the_key_or_upstreams() -> None:
+    gateway = await mount(ok_json())
+    try:
+        response = await send(gateway.app, "GET", "/health", api_key=None)
+    finally:
+        await gateway.aclose()
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+async def test_rejected_auth_does_not_consume_the_rate_limit() -> None:
+    gateway = await mount(ok_json(), make_settings(rate_limit="1/minute"))
+    try:
+        missing = await send(gateway.app, "POST", "/v1/features", api_key=None)
+        first = await send(gateway.app, "POST", "/v1/features")
+        second = await send(gateway.app, "POST", "/v1/features")
+    finally:
+        await gateway.aclose()
+    assert missing.status_code == 401
+    assert first.status_code == 200
+    assert second.status_code == 429
+
+
+async def test_rate_limit_is_shared_across_routes_and_per_client() -> None:
+    gateway = await mount(ok_json(), make_settings(rate_limit="2/minute"))
+    try:
+        features = await send(gateway.app, "POST", "/v1/features")
+        alerts = await send(gateway.app, "GET", "/v1/alerts")
+        blocked = await send(gateway.app, "POST", "/v1/features")
+        other = await send(gateway.app, "POST", "/v1/features", api_key="dev-dashboard-key")
+    finally:
+        await gateway.aclose()
+
+    assert features.status_code == 200
+    assert alerts.status_code == 200
+    assert blocked.status_code == 429
+    assert blocked.json() == {"detail": "rate limit exceeded"}
+    retry_after = blocked.headers["retry-after"]
+    assert int(retry_after) >= 0
+    assert other.status_code == 200
+    UUID(blocked.headers["x-request-id"])
+
+
+async def test_request_id_is_generated_and_forwarded() -> None:
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.headers["x-request-id"])
+        return httpx.Response(200, json={"ok": True})
+
+    gateway = await mount(handler)
+    try:
+        generated = await send(gateway.app, "POST", "/v1/features", content=b"{}")
+        preserved = await send(
+            gateway.app,
+            "POST",
+            "/v1/features",
+            content=b"{}",
+            headers={"X-Request-ID": "trace-1"},
+        )
+        blank = await send(
+            gateway.app,
+            "POST",
+            "/v1/features",
+            content=b"{}",
+            headers={"X-Request-ID": "   "},
+        )
+    finally:
+        await gateway.aclose()
+
+    assert generated.headers["x-request-id"] == seen[0]
+    UUID(generated.headers["x-request-id"])
+    assert preserved.headers["x-request-id"] == "trace-1"
+    assert seen[1] == "trace-1"
+    assert blank.headers["x-request-id"] == seen[2]
+    UUID(blank.headers["x-request-id"])
+    assert blank.headers["x-request-id"].strip() != ""
+
+
+async def test_request_log_carries_the_client_and_request_id(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO, logger="gateway")
+    gateway = await mount(ok_json())
+    try:
+        response = await send(
+            gateway.app,
+            "POST",
+            "/v1/features",
+            content=b"{}",
+            headers={"X-Request-ID": "trace-9"},
+        )
+    finally:
+        await gateway.aclose()
+    matched = [
+        record
+        for record in caplog.records
+        if record.getMessage() == "request" and getattr(record, "request_id", None) == "trace-9"
+    ]
+    assert matched
+    record = matched[-1]
+    assert getattr(record, "client", None) == "scoring"
+    assert getattr(record, "method", None) == "POST"
+    assert getattr(record, "path", None) == "/v1/features"
+    assert getattr(record, "status", None) == 200
+    assert response.status_code == 200
+
+
+def test_openapi_documents_the_business_routes(tmp_path: Path) -> None:
+    destination = tmp_path / "gateway.json"
+    export_openapi(str(destination))
+    document = json.loads(destination.read_text(encoding="utf-8"))
+    assert "/v1/events" not in document["paths"]
+    post = document["paths"]["/v1/features"]["post"]
+    assert post["security"] == [{"ApiKey": []}]
+    assert document["components"]["securitySchemes"]["ApiKey"]["name"] == "X-API-Key"
+    assert "FeatureRequest" in document["components"]["schemas"]
+    assert "AlertOut" in document["components"]["schemas"]
+    assert "CatalogEntry" in document["components"]["schemas"]
+    assert "/v1/alerts" in document["paths"]
+    assert "/v1/alerts/{alert_id}" in document["paths"]
+    assert "/v1/catalog" in document["paths"]
+    assert "/health" in document["paths"]
+    assert "security" not in document["paths"]["/health"]["get"]
+    assert "security" not in document["paths"]["/ready"]["get"]

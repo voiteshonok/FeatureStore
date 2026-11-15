@@ -106,6 +106,10 @@ exclude = [
 module = ["aiokafka", "aiokafka.*", "kafka", "kafka.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = ["slowapi", "slowapi.*", "limits", "limits.*"]
+ignore_missing_imports = true
+
 [tool.uv]
 package = false
 

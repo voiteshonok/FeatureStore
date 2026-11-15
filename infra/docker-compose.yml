@@ -176,6 +176,41 @@ services:
         limits:
           memory: 512m
 
+  features-api:
+    build:
+      context: ..
+      dockerfile: services/features/Dockerfile.api
+    ports:
+      - "8001:8001"
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql://svc_features:featurestore@postgres:5432/${POSTGRES_DB:-featurestore}
+      N_PARTITIONS: "4"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/ready')",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
   simulator:
     profiles: ["sim"]
     build:

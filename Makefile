@@ -7,7 +7,7 @@ KAFKA_TOPICS := /opt/kafka/bin/kafka-topics.sh
 up:
 	$(COMPOSE) up -d --wait kafka postgres redis clickhouse
 	$(MAKE) topics
-	$(COMPOSE) up -d --wait ingestion
+	$(COMPOSE) up -d --wait ingestion features-worker
 
 down:
 	$(COMPOSE) down

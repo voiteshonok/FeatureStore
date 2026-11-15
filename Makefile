@@ -7,7 +7,7 @@ KAFKA_TOPICS := /opt/kafka/bin/kafka-topics.sh
 up:
 	$(COMPOSE) up -d --wait kafka postgres redis clickhouse
 	$(MAKE) topics
-	$(COMPOSE) up -d --wait ingestion features-worker features-api
+	$(COMPOSE) up -d --wait ingestion features-worker features-api detection
 
 down:
 	$(COMPOSE) down
@@ -49,6 +49,7 @@ test-e2e:
 openapi:
 	uv run python -c "from ingestion.app import export_openapi; export_openapi('docs/openapi/ingestion.json')"
 	uv run python -c "from features.api import export_openapi; export_openapi('docs/openapi/features.json')"
+	uv run python -c "from detection.api import export_openapi; export_openapi('docs/openapi/detection.json')"
 
 pan-scan:
 	PYTHONPATH=tools uv run python -m pan_scan

@@ -601,11 +601,21 @@ name = "detection"
 version = "0.1.0"
 source = { editable = "services/detection" }
 dependencies = [
+    { name = "aiokafka" },
+    { name = "fastapi" },
+    { name = "psycopg", extra = ["binary", "pool"] },
     { name = "schemas" },
+    { name = "uvicorn" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "schemas", editable = "libs/schemas" }]
+requires-dist = [
+    { name = "aiokafka", specifier = ">=0.12.0" },
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.3.8" },
+    { name = "schemas", editable = "libs/schemas" },
+    { name = "uvicorn", specifier = ">=0.32" },
+]
 
 [[package]]
 name = "distlib"

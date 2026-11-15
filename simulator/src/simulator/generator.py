@@ -1,5 +1,6 @@
 """Seeded stream of synthetic payments and their send instructions."""
 
+import hashlib
 import random
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -10,7 +11,7 @@ from uuid import UUID
 from schemas import PaymentIn
 from schemas.time import to_utc_milliseconds
 from simulator.config import SimulatorConfig
-from simulator.population import Merchant, build_merchants, haversine_km, pan_for_index, sample_zipf
+from simulator.population import Merchant, build_merchants, haversine_km, pan_for_index, sample_card
 
 Kind = Literal["normal", "late_short", "late_long", "duplicate", "retry"]
 _SPEED_KMH = 900.0
@@ -50,8 +51,14 @@ def generate(
     config: SimulatorConfig,
     seed: int,
     clock: Clock,
+    *,
+    run_id: str = "0",
 ) -> Iterator[GeneratedPayment]:
-    """Yield payments forever from a single ``random.Random(seed)``."""
+    """Yield payments forever from a single ``random.Random(seed)``.
+
+    Cards, merchants, amounts and timings depend on ``seed`` only.
+    ``event_id`` and ``payment_id`` also depend on ``run_id``.
+    """
     rng = random.Random(seed)  # noqa: S311
     merchants = build_merchants(config, rng)
     by_city: tuple[tuple[Merchant, ...], ...] = tuple(
@@ -61,7 +68,12 @@ def generate(
     last_normal: dict[int, tuple[datetime, float, float, Merchant]] = {}
     payment_seq = 0
     while True:
-        card = sample_zipf(rng, config.zipf_alpha, config.n_cards) - 1
+        card = sample_card(
+            rng,
+            config.n_cards,
+            tail_shape=config.tail_shape,
+            max_weight_ratio=config.max_weight_ratio,
+        )
         send_at = _align(clock.now())
         merchant, lat, lon = _place(config, rng, by_city, card, send_at, last_normal)
         kind, event_time = _timing(config, rng, send_at)
@@ -70,14 +82,15 @@ def generate(
             "declined" if rng.random() < merchant.decline_rate else "approved"
         )
         amount = max(1, int(rng.lognormvariate(config.amount_log_mean, config.amount_log_sigma)))
+        payment_id = _payment_id(seed, run_id, payment_seq)
         payment = _payment(
             config,
             card=card,
             merchant=merchant,
             lat=lat,
             lon=lon,
-            payment_id=str(payment_seq),
-            event_id=_event_id(rng),
+            payment_id=payment_id,
+            event_id=_event_id(seed, run_id, payment_seq, 0),
             amount=amount,
             status=status,
             event_time=event_time,
@@ -99,7 +112,7 @@ def generate(
                 lat=lat,
                 lon=lon,
                 payment_id=payment.payment_id,
-                event_id=_event_id(rng),
+                event_id=_event_id(seed, run_id, payment_seq, 1),
                 amount=amount,
                 status=retry_status,
                 event_time=retry_at,
@@ -180,8 +193,17 @@ def _payment(
     )
 
 
-def _event_id(rng: random.Random) -> UUID:
-    return UUID(int=rng.getrandbits(128))
+def _event_id(seed: int, run_id: str, seq: int, delivery: int) -> UUID:
+    return UUID(bytes=_digest("event", seed, run_id, seq, delivery)[:16])
+
+
+def _payment_id(seed: int, run_id: str, seq: int) -> str:
+    return str(UUID(bytes=_digest("payment", seed, run_id, seq)[:16]))
+
+
+def _digest(*parts: object) -> bytes:
+    payload = "\0".join(str(part) for part in parts).encode()
+    return hashlib.sha256(payload).digest()
 
 
 def _align(value: datetime) -> datetime:

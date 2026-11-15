@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Self
 
 _DEFAULT_BOOTSTRAP = "localhost:29092"
-_DEFAULT_DATABASE_URL = "postgresql://svc_detection:featurestore@localhost:5432/featurestore"
+_DEFAULT_DATABASE_URL = "postgresql://svc_detection:svc_detection_dev@localhost:5432/featurestore"
 
 
 @dataclass(frozen=True)

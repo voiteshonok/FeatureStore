@@ -24,7 +24,13 @@ from detection_stack import (  # noqa: E402
     wait_for_kafka,
 )
 
-_INIT_SQL = Path(__file__).resolve().parents[3] / "infra" / "postgres" / "init.sql"
+_POSTGRES = Path(__file__).resolve().parents[3] / "infra" / "postgres"
+_ROLES_SQL = """
+CREATE ROLE svc_ingestion LOGIN PASSWORD 'svc_ingestion_dev';
+CREATE ROLE svc_features LOGIN PASSWORD 'svc_features_dev';
+CREATE ROLE svc_detection LOGIN PASSWORD 'svc_detection_dev';
+CREATE ROLE svc_gateway LOGIN PASSWORD 'svc_gateway_dev';
+"""
 
 
 def _dsn(postgres: PostgresContainer, *, user: str, password: str) -> str:
@@ -40,7 +46,9 @@ def _dsn(postgres: PostgresContainer, *, user: str, password: str) -> str:
 def _apply(dsn: str) -> None:
     with psycopg.connect(dsn, autocommit=True) as conn:
         with conn.cursor() as cur:
-            cur.execute(_INIT_SQL.read_text())
+            cur.execute(_ROLES_SQL)
+            cur.execute((_POSTGRES / "10-schema.sql").read_text())
+            cur.execute((_POSTGRES / "20-seed.sql").read_text())
 
 
 @dataclass(frozen=True)
@@ -68,6 +76,6 @@ def database() -> Iterator[Database]:
         service = _dsn(
             postgres,
             user="svc_detection",
-            password="featurestore",  # noqa: S106
+            password="svc_detection_dev",  # noqa: S106
         )
         yield Database(superuser, service)

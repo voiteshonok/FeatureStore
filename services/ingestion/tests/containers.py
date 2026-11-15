@@ -19,8 +19,18 @@ from ingestion.publisher import TOPIC
 
 KAFKA_IMAGE = "apache/kafka:3.9.0"
 POSTGRES_IMAGE = "postgres:17"
-INIT_SQL = Path(__file__).resolve().parents[3] / "infra" / "postgres" / "init.sql"
+_POSTGRES = Path(__file__).resolve().parents[3] / "infra" / "postgres"
+SCHEMA_SQL = _POSTGRES / "10-schema.sql"
+SEED_SQL = _POSTGRES / "20-seed.sql"
 PARTITIONS = [0, 1, 2, 3]
+# Dev passwords from infra/postgres/00-roles.sh. The shell script calls local psql,
+# so tests create the same login roles before 10-schema.sql grants to them.
+_ROLES_SQL = """
+CREATE ROLE svc_ingestion LOGIN PASSWORD 'svc_ingestion_dev';
+CREATE ROLE svc_features LOGIN PASSWORD 'svc_features_dev';
+CREATE ROLE svc_detection LOGIN PASSWORD 'svc_detection_dev';
+CREATE ROLE svc_gateway LOGIN PASSWORD 'svc_gateway_dev';
+"""
 
 
 def unused_port() -> int:
@@ -101,11 +111,21 @@ def connection_dsn(postgres: PostgresContainer) -> str:
     )
 
 
+def service_dsn(superuser_dsn: str, user: str, password: str) -> str:
+    """Same host as ``superuser_dsn``, logged in as a service role."""
+    params = psycopg.conninfo.conninfo_to_dict(superuser_dsn)
+    params["user"] = user
+    params["password"] = password
+    return psycopg.conninfo.make_conninfo(**params)
+
+
 def apply_schema(dsn: str) -> None:
-    with psycopg.connect(dsn) as conn:
+    """Create the service roles, then apply the DDL and the seed."""
+    with psycopg.connect(dsn, autocommit=True) as conn:
         with conn.cursor() as cur:
-            cur.execute(INIT_SQL.read_text())
-        conn.commit()
+            cur.execute(_ROLES_SQL)
+            cur.execute(SCHEMA_SQL.read_text())
+            cur.execute(SEED_SQL.read_text())
 
 
 @dataclass

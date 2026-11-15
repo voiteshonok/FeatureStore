@@ -10,7 +10,7 @@ from limits import parse_many
 
 _DEFAULT_FEATURES_URL = "http://localhost:8001"
 _DEFAULT_DETECTION_URL = "http://localhost:8002"
-_DEFAULT_DATABASE_URL = "postgresql://svc_gateway:featurestore@localhost:5432/featurestore"
+_DEFAULT_DATABASE_URL = "postgresql://svc_gateway:svc_gateway_dev@localhost:5432/featurestore"
 _DEFAULT_RATE_LIMIT = "100/second"
 
 

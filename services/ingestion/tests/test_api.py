@@ -11,7 +11,7 @@ from uuid import uuid4
 import pytest
 from aiokafka import AIOKafkaConsumer, TopicPartition
 from aiokafka.structs import ConsumerRecord
-from containers import PARTITIONS, KafkaService, wait_for_kafka
+from containers import PARTITIONS, KafkaService, service_dsn, wait_for_kafka
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
@@ -286,7 +286,7 @@ async def test_post_publishes_within_one_second_and_retries_after_outage(
     app = create_app(
         Settings(
             kafka_bootstrap=kafka.bootstrap,
-            database_url=postgres_dsn,
+            database_url=service_dsn(postgres_dsn, "svc_ingestion", "svc_ingestion_dev"),
             hmac_key_path=str(key_path),
             cleanup_interval_s=3600,
             ack_timeout_s=3,

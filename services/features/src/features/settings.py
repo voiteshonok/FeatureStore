@@ -6,7 +6,7 @@ from typing import Self
 
 _DEFAULT_BOOTSTRAP = "localhost:29092"
 _DEFAULT_REDIS_URL = "redis://localhost:6379/0"
-_DEFAULT_DATABASE_URL = "postgresql://svc_features:featurestore@localhost:5432/featurestore"
+_DEFAULT_DATABASE_URL = "postgresql://svc_features:svc_features_dev@localhost:5432/featurestore"
 
 
 @dataclass(frozen=True)

@@ -4,7 +4,7 @@ Fault-tolerant real-time feature storage and serving system for anomaly detectio
 payment transaction streams.
 
 Diploma project — European Humanities University, Software Development Center.
-Author: Vadzim Voiteshonok. Supervisor: Andrii Kostromytskyi.
+Author: Viacheslav Voiteshonok. Supervisor: Andrii Kostromytskyi.
 
 ## What it does
 

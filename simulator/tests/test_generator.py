@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from collections import defaultdict
+import random
+from collections import Counter, defaultdict
 from datetime import UTC, datetime, timedelta
 from itertools import islice
 
@@ -8,7 +9,7 @@ import pytest
 
 from schemas.pan import is_luhn
 from simulator import GeneratedPayment, StepClock, card_home, generate, load_config, pan_for_index
-from simulator.population import haversine_km
+from simulator.population import haversine_km, sample_card
 
 START = datetime(2026, 1, 1, tzinfo=UTC)
 STEP = timedelta(milliseconds=5)
@@ -32,6 +33,26 @@ def stream() -> list[GeneratedPayment]:
 def test_same_seed_replays_the_first_10_000() -> None:
     assert _take(7, 10_000) == _take(7, 10_000)
     assert _take(7, 100) != _take(8, 100)
+
+
+def test_run_id_changes_only_ids() -> None:
+    config = load_config()
+    first = list(islice(generate(config, 7, _clock(), run_id="a"), 2_000))
+    second = list(islice(generate(config, 7, _clock(), run_id="b"), 2_000))
+    assert first == list(islice(generate(config, 7, _clock(), run_id="a"), 2_000))
+    assert [_body(item) for item in first] == [_body(item) for item in second]
+    assert {item.payment.event_id for item in first}.isdisjoint(
+        {item.payment.event_id for item in second}
+    )
+    assert all(
+        left.payment.payment_id != right.payment.payment_id
+        for left, right in zip(first, second, strict=True)
+    )
+    for previous, item in zip(first, first[1:], strict=False):
+        if item.kind != "retry":
+            continue
+        assert item.payment.payment_id == previous.payment.payment_id
+        assert item.payment.event_id != previous.payment.event_id
 
 
 def test_pan_is_luhn_and_stable() -> None:
@@ -60,6 +81,28 @@ def test_profile_rates() -> None:
     assert config.late_long_rate == 0.001
     assert config.retry_rate == 0.3
     assert config.tps == 200
+    assert config.tail_shape == 1.2
+    assert config.max_weight_ratio == 30
+
+
+def test_card_activity_is_bounded_and_heavy_tailed() -> None:
+    """One million draws: no card above 60, busiest 1% of the population holds 5-25%."""
+    config = load_config()
+    rng = random.Random(0)  # noqa: S311
+    draws = 1_000_000
+    counts: Counter[int] = Counter()
+    for _ in range(draws):
+        card = sample_card(
+            rng,
+            config.n_cards,
+            tail_shape=config.tail_shape,
+            max_weight_ratio=config.max_weight_ratio,
+        )
+        counts[card] += 1
+    assert max(counts.values()) <= 60
+    top = config.n_cards // 100
+    share = sum(count for _, count in counts.most_common(top)) / draws
+    assert 0.05 <= share <= 0.25
 
 
 def test_duplicate_late_and_retry_shares(stream: list[GeneratedPayment]) -> None:
@@ -115,6 +158,21 @@ def test_duplicates_repeat_the_payment(stream: list[GeneratedPayment]) -> None:
         assert previous.payment == item.payment
         assert previous.kind in _PRIMARY
         assert item.send_at > previous.send_at
+
+
+def _body(item: GeneratedPayment) -> tuple[object, ...]:
+    payment = item.payment
+    return (
+        payment.pan,
+        payment.merchant_id,
+        payment.amount_minor,
+        payment.status,
+        payment.lat,
+        payment.lon,
+        payment.event_time,
+        item.kind,
+        item.send_at,
+    )
 
 
 def _count(stream: list[GeneratedPayment], kind: str) -> int:

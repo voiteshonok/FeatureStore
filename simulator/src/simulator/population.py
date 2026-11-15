@@ -6,10 +6,12 @@ Cards are not stored. A PAN and a home are pure functions of the card index.
 import math
 import random
 from dataclasses import dataclass
+from statistics import NormalDist
 
 from simulator.config import SimulatorConfig
 
 _KM_PER_DEG = 111.32
+_NORMAL = NormalDist()
 
 
 def pan_for_index(index: int, *, bin: str = "411111", length: int = 16) -> str:
@@ -34,27 +36,25 @@ def card_home(index: int, config: SimulatorConfig) -> tuple[float, float]:
     return _clamp_lat(city.lat + lat_off), _clamp_lon(city.lon + lon_off)
 
 
-def sample_zipf(rng: random.Random, alpha: float, n: int) -> int:
-    """Return an integer in ``1..n`` with probability proportional to ``k ** -alpha``.
+def sample_card(
+    rng: random.Random,
+    n: int,
+    *,
+    tail_shape: float,
+    max_weight_ratio: float,
+) -> int:
+    """Return a card index in ``0 .. n-1``.
 
-    Rejection sampling (Devroye) so the weight table is never materialised.
+    Draw an index uniformly and accept it with probability
+    ``weight(index) / max_weight_ratio``. The weight is a log-normal function of
+    the index only (median 1, shape ``tail_shape``), capped at
+    ``max_weight_ratio``. Nothing proportional to ``n`` is stored.
     """
-    exponent = -1.0 / (alpha - 1.0)
-    bound = 2.0 ** (alpha - 1.0)
     while True:
-        unit = rng.random()
-        if unit <= 0.0:
-            continue
-        proposed = unit**exponent
-        if proposed > n:
-            continue
-        draw = int(proposed)
-        if draw < 1:
-            continue
-        lifted = (1.0 + 1.0 / draw) ** (alpha - 1.0)
-        accept = rng.random() * draw * (lifted - 1.0) / (bound - 1.0)
-        if accept <= lifted / bound:
-            return draw
+        index = rng.randrange(n)
+        weight = _card_weight(index, tail_shape=tail_shape, max_weight_ratio=max_weight_ratio)
+        if rng.random() < weight / max_weight_ratio:
+            return index
 
 
 @dataclass(frozen=True)
@@ -113,6 +113,25 @@ def _luhn_check_digit(body: str) -> str:
                 digit -= 9
         total += digit
     return str((10 - (total % 10)) % 10)
+
+
+def _card_weight(index: int, *, tail_shape: float, max_weight_ratio: float) -> float:
+    """Capped log-normal weight for ``index``. The uncapped median is 1."""
+    z = _NORMAL.inv_cdf(_unit_interval(index))
+    return min(math.exp(tail_shape * z), max_weight_ratio)
+
+
+def _unit_interval(index: int) -> float:
+    """Deterministic value in ``(0, 1)`` from the card index."""
+    mixed = (index + 0x9E3779B97F4A7C15) & 0xFFFFFFFFFFFFFFFF
+    mixed = (mixed ^ (mixed >> 30)) * 0xBF58476D1CE4E5B9 & 0xFFFFFFFFFFFFFFFF
+    mixed = (mixed ^ (mixed >> 27)) * 0x94D049BB133111EB & 0xFFFFFFFFFFFFFFFF
+    mixed ^= mixed >> 31
+    # Top 53 bits, shifted off 0. All ones would land on 1.
+    unit = ((mixed >> 11) + 1) * 2.0**-53
+    if unit >= 1.0:
+        return math.nextafter(1.0, 0.0)
+    return unit
 
 
 def _signed_unit(index: int, salt: int) -> float:

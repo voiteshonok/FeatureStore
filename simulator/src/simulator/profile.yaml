@@ -2,7 +2,8 @@ n_cards: 3000000
 n_merchants: 5000
 bin: "411111"
 pan_length: 16
-zipf_alpha: 1.2
+tail_shape: 1.2
+max_weight_ratio: 30
 tps: 200
 card_home_sigma_km: 2
 merchant_sigma_km: 3

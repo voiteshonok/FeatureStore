@@ -111,10 +111,15 @@ async def run_sender(
     tps: float,
     duration_s: float,
     seed: int,
+    run_id: str = "0",
     client: httpx.AsyncClient | None = None,
     report: bool = True,
 ) -> Stats:
-    """Generate payments for ``duration_s`` and post them at ``tps``."""
+    """Generate payments for ``duration_s`` and post them at ``tps``.
+
+    ``run_id`` changes ``event_id`` and ``payment_id`` only. The default keeps a
+    run reproducible; the command line picks a random id when none is given.
+    """
     if client is None:
         async with _client() as owned:
             return await _run(
@@ -123,6 +128,7 @@ async def run_sender(
                 tps=tps,
                 duration_s=duration_s,
                 seed=seed,
+                run_id=run_id,
                 report=report,
             )
     return await _run(
@@ -131,6 +137,7 @@ async def run_sender(
         tps=tps,
         duration_s=duration_s,
         seed=seed,
+        run_id=run_id,
         report=report,
     )
 
@@ -202,11 +209,12 @@ async def _run(
     tps: float,
     duration_s: float,
     seed: int,
+    run_id: str,
     report: bool,
 ) -> Stats:
     endpoint = url.rstrip("/") + "/v1/events"
     clock = StepClock(datetime.now(UTC), timedelta(seconds=1 / tps))
-    stream = generate(load_config(), seed, clock)
+    stream = generate(load_config(), seed, clock, run_id=run_id)
     stats = Stats()
     lock = asyncio.Lock()
     bucket = TokenBucket(tps)

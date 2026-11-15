@@ -52,11 +52,13 @@ Service boundaries, contracts and the full deployment diagram: see
 | --- | --- |
 | ingestion | done — API, idempotency, Kafka publisher, PAN tokenization, tests |
 | simulator | done |
-| libs/schemas (contracts) | done — event, feature and catalog contracts, contract tests |
+| libs/schemas (contracts) | done — event, snapshot and catalog contracts, contract tests |
 | infra (compose, Kafka, Postgres, Redis, ClickHouse) | done |
-| features | in progress (stage 3) |
-| detection | in progress (stage 3) |
-| gateway | in progress (stage 3) |
+| features | done — worker (Redis windows, watermarks, snapshots) + api (serving, ADR-013 freshness), two images (ADR-007) |
+| detection | done — rule evaluation over snapshots, alert lifecycle API, audit via DB trigger |
+| gateway | done — routing, API-key auth, rate limiting, timeouts/retries, request ids |
+| PostgreSQL OLTP (schemas, roles, seed) | done — infra/postgres, docs/db |
+| e2e | stage 2 and stage 3 flows (tests/e2e) |
 | dashboard | planned |
 
 ## Quickstart
@@ -78,8 +80,10 @@ make lint typecheck test   # ruff, mypy, unit tests
 make test-int              # integration tests (require docker)
 ```
 
-Interactive API docs (ingestion): http://localhost:8000/docs — exported spec in
-[docs/openapi/](docs/openapi/).
+Interactive API docs: ingestion http://localhost:8000/docs, features
+http://localhost:8001/docs, detection http://localhost:8002/docs, gateway
+http://localhost:8080/docs (requests need `X-API-Key`, dev keys in
+`infra/.env.example`) — exported specs in [docs/openapi/](docs/openapi/).
 
 ## Repository layout
 

@@ -45,6 +45,15 @@ GRANT SELECT, INSERT, UPDATE
     ON features.feature_definitions, features.feature_versions
     TO svc_features;
 
+-- Read-only feature registry for the gateway (ADR-008).
+-- The password matches the other service roles.
+CREATE ROLE svc_gateway LOGIN PASSWORD 'featurestore';
+
+GRANT USAGE ON SCHEMA features TO svc_gateway;
+GRANT SELECT
+    ON features.feature_definitions, features.feature_versions
+    TO svc_gateway;
+
 -- Detection rules and alerts. svc_detection reads feature kind from the catalog
 -- table and does not read feature values. The password matches svc_features.
 -- impossible_travel stays disabled: snapshots carry stream features only (ADR-013).

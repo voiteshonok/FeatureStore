@@ -242,6 +242,42 @@ services:
         limits:
           memory: 512m
 
+  gateway:
+    build:
+      context: ..
+      dockerfile: services/gateway/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      GATEWAY_API_KEYS: ${GATEWAY_API_KEYS:-scoring:dev-scoring-key,dashboard:dev-dashboard-key}
+      GATEWAY_RATE_LIMIT: ${GATEWAY_RATE_LIMIT:-100/second}
+      FEATURES_URL: http://features-api:8001
+      DETECTION_URL: http://detection:8002
+      DATABASE_URL: postgresql://svc_gateway:featurestore@postgres:5432/${POSTGRES_DB:-featurestore}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      features-api:
+        condition: service_healthy
+      detection:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/ready')",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
   simulator:
     profiles: ["sim"]
     build:

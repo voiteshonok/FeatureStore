@@ -1,8 +1,8 @@
 # ADR-008: API gateway
 
-- **Status:** Proposed (decide before Stage 7)
+- **Status:** Accepted
 - **Date:** 2026-11-07
-- **Related:** NFR-9, US-6.5; complexity criterion "Microservices"
+- **Related:** NFR-9, US-6.5; complexity criterion "Microservices"; ADR-012
 
 ## Context
 
@@ -10,6 +10,9 @@ External clients (scoring service, dashboard) need one entry point with authenti
 (JWT for dashboard users, API keys for the scoring service), routing to internal
 services, rate limiting (100 requests per second per client) and TLS. The gateway adds
 a network hop to the feature read path, so its latency counts towards K1.
+
+The ingestion write path is a separate published port. Event volume and backpressure
+stay on that service.
 
 ## Alternatives considered
 
@@ -20,9 +23,35 @@ a network hop to the feature read path, so its latency counts towards K1.
 
 ## Decision
 
-Not taken yet. Criteria: added p99 latency on the feature path, implementation effort,
-how clearly the choice can be justified for the Microservices criterion.
+Accepted on 2026-11-15: a thin custom FastAPI gateway.
+
+The gateway is the entry point for read and control traffic. It checks API keys, limits
+each client to 100 requests per second, and proxies to the feature API and the detection
+API. It does not compute features. TLS termination stays outside the process
+(compose-internal HTTP). JWT and OIDC are outside the diploma scope; callers present
+API keys.
+
+Ingestion keeps published port 8000. The gateway does not route `POST /v1/events`, so
+write-path backpressure and delivery stay at ingestion.
+
+The feature catalog is read from Postgres. features-api exposes `POST /v1/features` and
+health only (ADR-007, ADR-012), so the gateway runs one `SELECT` as `svc_gateway`.
 
 ## Consequences
 
-To be filled in when the decision is taken.
+- Clients call port 8080 for features, alerts, and the catalog. Ingestion stays on
+  port 8000. features-api and detection keep their compose ports until every client
+  uses the gateway.
+- `GATEWAY_API_KEYS` holds comma-separated `client:key` pairs. A missing key is 401
+  and an unknown key is 403. The client name is the rate-limit identity and is written
+  on the request log.
+- The 100 requests/second budget is one bucket per client across the proxied routes,
+  enforced in process by slowapi. One gateway replica is the deployed shape; another
+  replica would have its own bucket.
+- Upstream calls use a 0.5 s connect timeout and a 2 s read timeout. GET is tried
+  three times, with 0.1 s then 0.4 s between attempts. POST and PATCH are not retried.
+  A connection failure or timeout becomes 503. An upstream HTTP response, including
+  4xx, is returned unchanged.
+- `svc_gateway` has `SELECT` on the feature registry tables and nothing else. A failed
+  catalog read is 503.
+- The extra hop is on the feature read path and counts toward K1.

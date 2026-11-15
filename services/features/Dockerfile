@@ -1,4 +1,4 @@
-# Worker image (ADR-007). The API image is a later target from this package.
+# Worker image (ADR-007). The API image is services/features/Dockerfile.api.
 FROM python:3.12-slim-bookworm AS build
 
 COPY --from=ghcr.io/astral-sh/uv:0.11.17 /uv /uvx /bin/

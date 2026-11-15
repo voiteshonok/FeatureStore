@@ -16,3 +16,4 @@ new ADR that supersedes the old one.
 | [008](008-api-gateway.md) | API gateway | Proposed | 2026-11-07 |
 | [009](009-tokenization-secret.md) | Tokenization secret | Accepted | 2026-11-07 |
 | [012](012-feature-catalog.md) | Feature catalog as code | Accepted | 2026-11-08 |
+| [013](013-freshness-semantics.md) | Freshness semantics | Accepted | 2026-11-15 |

@@ -14,8 +14,14 @@ from schemas import CATALOG
 
 pytestmark = pytest.mark.integration
 
-_INIT_SQL = Path(__file__).resolve().parents[3] / "infra" / "postgres" / "init.sql"
+_POSTGRES = Path(__file__).resolve().parents[3] / "infra" / "postgres"
 _POSTGRES_IMAGE = "postgres:17"
+_ROLES_SQL = """
+CREATE ROLE svc_ingestion LOGIN PASSWORD 'svc_ingestion_dev';
+CREATE ROLE svc_features LOGIN PASSWORD 'svc_features_dev';
+CREATE ROLE svc_detection LOGIN PASSWORD 'svc_detection_dev';
+CREATE ROLE svc_gateway LOGIN PASSWORD 'svc_gateway_dev';
+"""
 _ROWS = """
 SELECT d.name, d.entity, d.kind, d.agg, d.default_value,
        v.version, v.window_ms, v.stale_after_ms
@@ -41,7 +47,9 @@ def _apply(postgres: PostgresContainer) -> None:
         autocommit=True,
     ) as conn:
         with conn.cursor() as cur:
-            cur.execute(_INIT_SQL.read_text())
+            cur.execute(_ROLES_SQL)
+            cur.execute((_POSTGRES / "10-schema.sql").read_text())
+            cur.execute((_POSTGRES / "20-seed.sql").read_text())
 
 
 def _millis(value: object) -> int | None:
@@ -64,7 +72,7 @@ async def test_registry_upsert_is_unchanged_on_second_boot() -> None:
     with PostgresContainer(_POSTGRES_IMAGE, driver=None) as postgres:
         _apply(postgres)
         pool: AsyncConnectionPool = AsyncConnectionPool(
-            _dsn(postgres, user="svc_features", password="featurestore"),  # noqa: S106
+            _dsn(postgres, user="svc_features", password="svc_features_dev"),  # noqa: S106
             open=False,
         )
         await pool.open(wait=True, timeout=30)

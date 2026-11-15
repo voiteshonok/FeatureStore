@@ -27,7 +27,7 @@ from schemas import PaymentIn, check_event_time
 
 _READY_TIMEOUT_S = 1.0
 _DELETE_EXPIRED = "SELECT ingestion.delete_expired_idempotency_keys()"
-_DEFAULT_DATABASE_URL = "postgresql://featurestore:featurestore@localhost:5432/featurestore"
+_DEFAULT_DATABASE_URL = "postgresql://svc_ingestion:svc_ingestion_dev@localhost:5432/featurestore"
 Sleep = Callable[[float], Awaitable[None]]
 
 

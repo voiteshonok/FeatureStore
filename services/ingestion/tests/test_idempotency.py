@@ -1,30 +1,28 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from pathlib import Path
 from uuid import UUID, uuid4
 
 import psycopg
 import pytest
+from containers import apply_schema
 from testcontainers.community.postgres import PostgresContainer
 
 POSTGRES_IMAGE = "postgres:17"
-INIT_SQL = Path(__file__).resolve().parents[3] / "infra" / "postgres" / "init.sql"
 
 
 @pytest.fixture(scope="module")
 def postgres_conn() -> Iterator[psycopg.Connection[tuple[object, ...]]]:
     with PostgresContainer(POSTGRES_IMAGE, driver=None) as postgres:
-        with psycopg.connect(
+        dsn = psycopg.conninfo.make_conninfo(
             host=postgres.get_container_host_ip(),
             port=postgres.get_exposed_port(postgres.port),
             user=postgres.username,
             password=postgres.password,
             dbname=postgres.dbname,
-        ) as conn:
-            with conn.cursor() as cur:
-                cur.execute(INIT_SQL.read_text())
-            conn.commit()
+        )
+        apply_schema(dsn)
+        with psycopg.connect(dsn) as conn:
             yield conn
 
 

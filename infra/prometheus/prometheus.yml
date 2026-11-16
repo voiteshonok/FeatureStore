@@ -1,0 +1,27 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+rule_files:
+  - rules.yml
+
+scrape_configs:
+  - job_name: ingestion
+    static_configs:
+      - targets: ["ingestion:9000"]
+
+  - job_name: features-worker
+    static_configs:
+      - targets: ["features-worker:9000"]
+
+  - job_name: features-api
+    static_configs:
+      - targets: ["features-api:9000"]
+
+  - job_name: detection
+    static_configs:
+      - targets: ["detection:9000"]
+
+  - job_name: gateway
+    static_configs:
+      - targets: ["gateway:9000"]

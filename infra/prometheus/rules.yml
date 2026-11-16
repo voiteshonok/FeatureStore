@@ -1,0 +1,17 @@
+groups:
+  - name: featurestore
+    rules:
+      - record: features_request_duration_seconds:p50
+        expr: histogram_quantile(0.5, sum by (le) (rate(features_request_duration_seconds_bucket[1m])))
+
+      - record: features_request_duration_seconds:p99
+        expr: histogram_quantile(0.99, sum by (le) (rate(features_request_duration_seconds_bucket[1m])))
+
+      - record: features_event_to_online_seconds:p95
+        expr: histogram_quantile(0.95, sum by (le) (rate(features_event_to_online_seconds_bucket[1m])))
+
+      - record: features_values_not_fresh:ratio
+        expr: >
+          sum(rate(features_values_total{status!="fresh"}[1m]))
+          /
+          sum(rate(features_values_total[1m]))

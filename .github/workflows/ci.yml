@@ -16,6 +16,16 @@ jobs:
       - run: uv sync --locked
       - run: uv run ruff check .
       - run: uv run mypy .
+      - name: promtool
+        run: |
+          docker run --rm --entrypoint promtool \
+            -v "${{ github.workspace }}/infra/prometheus:/config:ro" \
+            prom/prometheus:v3.16.0 \
+            check config /config/prometheus.yml
+          docker run --rm --entrypoint promtool \
+            -v "${{ github.workspace }}/infra/prometheus:/config:ro" \
+            prom/prometheus:v3.16.0 \
+            check rules /config/rules.yml
 
   test:
     runs-on: ubuntu-latest

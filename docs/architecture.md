@@ -111,6 +111,7 @@ flowchart TB
             FW[features-worker]
             FA[features-api :8001→8001]
             DET[detection :8002→8002]
+            PROM["prometheus :9090"]
             K[(kafka :29092→9092)]
             PG[(postgres :5432)]
             R[(redis :6379)]
@@ -118,6 +119,11 @@ flowchart TB
         end
         SEC[/compose secret: hmac_key/] -.-> ING
         ENV[/.env: DB passwords/] -.-> PG & ING & FEAT & DET & GW
+        ING -.->|"scrape :9000"| PROM
+        FW -.->|"scrape :9000"| PROM
+        FA -.->|"scrape :9000"| PROM
+        DET -.->|"scrape :9000"| PROM
+        GW -.->|"scrape :9000"| PROM
     end
 ```
 
@@ -127,6 +133,8 @@ flowchart TB
 - Every service exposes `GET /health` (liveness, no I/O) and `GET /ready`
   (dependency probes with timeouts).
 - Resource limits are set per container; data lives in named volumes.
+- Prometheus is the optional `obs` profile (`127.0.0.1:9090`) and scrapes each
+  service on port 9000. Grafana and Alertmanager are not in this compose file.
 
 ## Fault-tolerance summary (per dependency)
 

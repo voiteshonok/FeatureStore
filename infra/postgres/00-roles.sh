@@ -17,6 +17,8 @@ psql -v ON_ERROR_STOP=1 \
     CREATE ROLE svc_features  LOGIN PASSWORD '${SVC_FEATURES_PASSWORD:-svc_features_dev}';
     CREATE ROLE svc_detection LOGIN PASSWORD '${SVC_DETECTION_PASSWORD:-svc_detection_dev}';
     CREATE ROLE svc_gateway   LOGIN PASSWORD '${SVC_GATEWAY_PASSWORD:-svc_gateway_dev}';
+    -- Measurement stand (ADR-015). Not a product service and not a member of the tiers above.
+    CREATE ROLE svc_baseline  LOGIN PASSWORD '${SVC_BASELINE_PASSWORD:-svc_baseline_dev}';
 
     GRANT fs_write TO svc_ingestion, svc_features, svc_detection;
     GRANT fs_read  TO svc_gateway;

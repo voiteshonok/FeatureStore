@@ -6,9 +6,10 @@ why three engines coexist is argued in `docs/criteria/database.md`.
 
 Structure is created exclusively by the scripts in
 [`infra/postgres/`](../../infra/postgres/) — `00-roles.sh` (roles; passwords from
-the environment, nothing in Git) → `10-schema.sql` → `20-seed.sql` — mounted into
-`/docker-entrypoint-initdb.d` and executed once when the Postgres volume is
-created. No objects are created by hand.
+the environment, nothing in Git) → `10-schema.sql` → `20-seed.sql` →
+`30-baseline.sql` — mounted into `/docker-entrypoint-initdb.d` and executed once
+when the Postgres volume is created. No objects are created by hand.
+`30-baseline.sql` is the measurement stand, not a product schema (ADR-015).
 
 ## Schemas (one per bounded context)
 
@@ -19,6 +20,7 @@ created. No objects are created by hand.
 | `features` | features api | Feature registry, materialized from the catalog in code (ADR-012) |
 | `detection` | detection | Alert rules, clause links, alerts |
 | `ops` | trigger (audit), seed | Operators, audit trail |
+| `baseline` | baseline writer | Стенд для замеров, не часть продукта (ADR-015) |
 
 Each service connects under its own account (`svc_*`) and writes only to its own
 schema; everything else is `SELECT` at most. The application never connects as the
@@ -103,6 +105,16 @@ comparison and threshold per clause — a rule fires only when **all** its claus
 hold).
 
 ## Tables
+
+### baseline.transactions
+
+Стенд для замеров, не часть продукта (ADR-015). One row per delivered event.
+`event_id` is the primary key, so a replay collapses in
+`INSERT … ON CONFLICT DO NOTHING`. The stand keeps every column the feature
+queries need and nothing else: no `payment_id`, no retention, no partitioning.
+Indexes `(card_token, event_time DESC)` and `(merchant_id, event_time DESC)`
+serve the card window and the merchant window. `svc_baseline` is the only
+login granted on this schema and is not a member of `fs_read` or `fs_write`.
 
 ### ingestion.idempotency_keys
 
@@ -199,6 +211,7 @@ mechanism, explicit history.
 | svc_features | `features`: write registry |
 | svc_detection | `detection`: write alerts, read rules; `features`: read; `ref`: read + insert (registry upsert) |
 | svc_gateway | read-only: open_alerts_v, alerts, alert_rules, merchants, feature registry, **operators_masked** (not operators) |
+| svc_baseline | `baseline.transactions`: select, insert. No other schema. Not a member of `fs_read` or `fs_write`. Measurement stand, not part of the product (ADR-015) |
 | container owner | schema owner — init/migrations only, never used by services |
 
 Role passwords come from the environment (`infra/.env`, from `.env.example`);

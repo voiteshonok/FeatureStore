@@ -1,8 +1,10 @@
 COMPOSE := docker compose -f infra/docker-compose.yml
+# `up` does not enable profiles. `down` must, or those containers keep the network.
+PROFILES := --profile baseline --profile obs --profile sim
 KAFKA_BOOTSTRAP := localhost:9092
 KAFKA_TOPICS := /opt/kafka/bin/kafka-topics.sh
 
-.PHONY: up down logs ps topics secret lint typecheck test test-int test-e2e clean openapi pan-scan obs-up
+.PHONY: up down logs ps topics secret lint typecheck test test-int test-e2e clean openapi pan-scan obs-up baseline-up
 
 up:
 	$(COMPOSE) up -d --wait kafka postgres redis clickhouse
@@ -12,14 +14,17 @@ up:
 obs-up:
 	$(COMPOSE) --profile obs up -d --wait prometheus
 
+baseline-up:
+	$(COMPOSE) --profile baseline up -d --wait baseline-writer baseline-api
+
 down:
-	$(COMPOSE) down
+	$(COMPOSE) $(PROFILES) down
 
 logs:
-	$(COMPOSE) logs -f --tail=100
+	$(COMPOSE) $(PROFILES) logs -f --tail=100
 
 ps:
-	$(COMPOSE) ps
+	$(COMPOSE) $(PROFILES) ps
 
 topics:
 	$(COMPOSE) exec -T kafka $(KAFKA_TOPICS) --bootstrap-server $(KAFKA_BOOTSTRAP) \
@@ -59,4 +64,4 @@ pan-scan:
 	PYTHONPATH=tools uv run python -m pan_scan
 
 clean:
-	$(COMPOSE) down -v
+	$(COMPOSE) $(PROFILES) down -v

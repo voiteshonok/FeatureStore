@@ -8,6 +8,7 @@ resolution-markers = [
 
 [manifest]
 members = [
+    "baseline",
     "detection",
     "feature-store",
     "features",
@@ -199,6 +200,29 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/42/a2/629f5e9c3edd2a31f7dd65b8097241b5036f98105efac251a12c1a8f7cb5/backports_zstd-1.8.0-pp312-pypy312_pp80-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:63ae348b629121eeb967244fecd254f41b4b3a63d074c252f4d7777f5d17c71c", size = 396431, upload-time = "2026-10-10T16:36:34.842Z" },
     { url = "https://files.pythonhosted.org/packages/9e/f6/9c223e9cccc5a797c17475fde1a8a78ada0dcdd39be2302f4605e565c0ce/backports_zstd-1.8.0-pp312-pypy312_pp80-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:163b5c36321bf5652b6e4aeb04d3644ddbf9c1881a82322e376e5be3532af26b", size = 416398, upload-time = "2026-10-10T16:36:36.706Z" },
     { url = "https://files.pythonhosted.org/packages/8f/e3/2eb6f517c9a6746a735b49ba4ab3ed3df6c4ec9072169805547ae590e296/backports_zstd-1.8.0-pp312-pypy312_pp80-win_amd64.whl", hash = "sha256:3f0288db18a64f4f4146f4526456ff62b2edb625b2d43956e764885edd3f1da2", size = 404272, upload-time = "2026-10-10T16:36:38.766Z" },
+]
+
+[[package]]
+name = "baseline"
+version = "0.1.0"
+source = { editable = "experiments/baseline" }
+dependencies = [
+    { name = "aiokafka" },
+    { name = "fastapi" },
+    { name = "prometheus-client" },
+    { name = "psycopg", extra = ["binary", "pool"] },
+    { name = "schemas" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiokafka", specifier = ">=0.12.0" },
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "prometheus-client", specifier = ">=0.21" },
+    { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.3.8" },
+    { name = "schemas", editable = "libs/schemas" },
+    { name = "uvicorn", specifier = ">=0.32" },
 ]
 
 [[package]]
@@ -705,6 +729,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "baseline" },
     { name = "clickhouse-connect" },
     { name = "fakeredis", extra = ["lua"] },
     { name = "httpx" },
@@ -735,6 +760,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "baseline", editable = "experiments/baseline" },
     { name = "clickhouse-connect", specifier = ">=1.12.0" },
     { name = "fakeredis", extras = ["lua"], specifier = ">=2.26.0" },
     { name = "httpx", specifier = ">=0.27" },

@@ -29,6 +29,7 @@ dev = [
     "ruff>=0.8",
     "testcontainers[clickhouse,kafka,postgres,redis]>=4.15.0",
     "types-PyYAML>=6.0",
+    "baseline",
 ]
 
 [tool.pytest.ini_options]
@@ -39,6 +40,7 @@ testpaths = [
     "services/features/tests",
     "services/detection/tests",
     "services/gateway/tests",
+    "experiments/baseline/tests",
     "tools/pan_scan/tests",
     "tests/e2e",
 ]
@@ -57,6 +59,7 @@ addopts = [
     "--cov=services/features/src",
     "--cov=services/detection/src",
     "--cov=services/gateway/src",
+    "--cov=experiments/baseline/src",
     "--cov-fail-under=70",
 ]
 
@@ -74,6 +77,7 @@ src = [
     "services/features/src",
     "services/detection/src",
     "services/gateway/src",
+    "experiments/baseline/src",
     "tools",
 ]
 
@@ -96,6 +100,7 @@ mypy_path = [
     "services/features/src",
     "services/detection/src",
     "services/gateway/src",
+    "experiments/baseline/src",
     "tools",
 ]
 exclude = [
@@ -118,6 +123,7 @@ members = [
     "libs/schemas",
     "simulator",
     "services/*",
+    "experiments/baseline",
 ]
 
 [tool.uv.sources]
@@ -127,3 +133,4 @@ ingestion = { workspace = true }
 features = { workspace = true }
 detection = { workspace = true }
 gateway = { workspace = true }
+baseline = { workspace = true }

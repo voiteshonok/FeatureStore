@@ -69,6 +69,7 @@ Requirements: Docker + Docker Compose, `uv`, Python 3.12.
 make secret        # generate the local HMAC key (never committed)
 make up            # kafka, postgres, redis, clickhouse, topics, ingestion
 make ps            # check health
+make baseline-up   # SQL measurement stand on :8003 (ADR-015); not a service, not started by make up
 # send traffic:
 docker compose -f infra/docker-compose.yml --profile sim up simulator
 ```
@@ -87,8 +88,8 @@ http://localhost:8080/docs (requests need `X-API-Key`, dev keys in
 
 ## Metrics
 
-Prometheus is optional and scrapes the five service metrics ports (ADR-014).
-`make up` does not start it.
+Prometheus is optional and scrapes metrics ports (ADR-014), including the
+baseline processes when that profile is up. `make up` does not start it.
 
 ```bash
 make up

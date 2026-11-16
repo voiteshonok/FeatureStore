@@ -4,7 +4,7 @@ PROFILES := --profile baseline --profile obs --profile sim
 KAFKA_BOOTSTRAP := localhost:9092
 KAFKA_TOPICS := /opt/kafka/bin/kafka-topics.sh
 
-.PHONY: up down logs ps topics secret lint typecheck test test-int test-e2e clean openapi pan-scan obs-up baseline-up
+.PHONY: up down logs ps topics secret lint typecheck test test-int test-e2e clean openapi pan-scan obs-up baseline-up backfill
 
 up:
 	$(COMPOSE) up -d --wait kafka postgres redis clickhouse
@@ -16,6 +16,16 @@ obs-up:
 
 baseline-up:
 	$(COMPOSE) --profile baseline up -d --wait baseline-writer baseline-api
+
+# One-shot history fill. Does not start with --profile sim.
+# 3m at 200 TPS is 36,000 primary events: about 5 minutes at ~130 posts/s.
+backfill:
+	$(COMPOSE) --profile sim run --build --rm simulator \
+		--backfill $(or $(BACKFILL),3m) \
+		--tps $(or $(TPS),200) \
+		--send-rate $(or $(SEND_RATE),2000) \
+		--seed $(or $(SEED),42) \
+		--url http://ingestion:8000
 
 down:
 	$(COMPOSE) $(PROFILES) down

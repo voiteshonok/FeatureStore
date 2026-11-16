@@ -72,7 +72,11 @@ make ps            # check health
 make baseline-up   # SQL measurement stand on :8003 (ADR-015); not a service, not started by make up
 # send traffic:
 docker compose -f infra/docker-compose.yml --profile sim up simulator
+# fill a few minutes of history through ingestion:
+make backfill      # 3m at 200 TPS, about 5 minutes wall time; override BACKFILL, TPS, SEND_RATE, SEED
 ```
+
+`make backfill` runs the simulator image once. It does not start with the `sim` profile, so a live simulator and a warmup are not launched together. The default is 3 minutes of history at 200 TPS: 36,000 primary events, plus duplicates and retries. At the measured ingestion rate of about 130 posts per second that finishes in about 5 minutes. `--send-rate` stays a ceiling of 2,000/s; the JSON line reports the event count, elapsed time, achieved post rate, `http_422`, `http_503`, and the `event_time` bounds. A full day is `make backfill BACKFILL=23h`. `--backfill` must be shorter than 24 h, because ingestion rejects older events. The warmup posts to ingestion, which publishes the accepted events to Kafka.
 
 Run checks locally:
 

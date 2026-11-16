@@ -11,12 +11,14 @@ import httpx
 
 from schemas import PaymentIn
 from simulator.config import load_config
-from simulator.generator import StepClock, generate
+from simulator.generator import StepClock, backfill_clock, generate
 
 _MAX_ATTEMPTS = 5
 _BACKOFF_START_S = 0.1
 _BACKOFF_CAP_S = 30.0
 _REPORT_INTERVAL_S = 10.0
+MAX_BACKFILL_S = 24 * 60 * 60
+_DEFAULT_MAX_IN_FLIGHT = 64
 
 
 @dataclass
@@ -33,6 +35,8 @@ class Stats:
     failed: int = 0
     elapsed_s: float = 0.0
     latencies_ms: list[float] = field(default_factory=list)
+    event_time_min: datetime | None = None
+    event_time_max: datetime | None = None
 
     @property
     def achieved_tps(self) -> float:
@@ -40,8 +44,8 @@ class Stats:
             return 0.0
         return self.generated / self.elapsed_s
 
-    def to_json(self) -> dict[str, float | int]:
-        return {
+    def to_json(self) -> dict[str, float | int | str]:
+        payload: dict[str, float | int | str] = {
             "generated": self.generated,
             "sent": self.sent,
             "accepted": self.accepted,
@@ -55,6 +59,10 @@ class Stats:
             "latency_p95_ms": _percentile(self.latencies_ms, 95),
             "elapsed_s": self.elapsed_s,
         }
+        if self.event_time_min is not None and self.event_time_max is not None:
+            payload["event_time_min"] = self.event_time_min.isoformat()
+            payload["event_time_max"] = self.event_time_max.isoformat()
+        return payload
 
 
 class TokenBucket:
@@ -138,6 +146,63 @@ async def run_sender(
         duration_s=duration_s,
         seed=seed,
         run_id=run_id,
+        report=report,
+    )
+
+
+async def run_backfill(
+    *,
+    url: str,
+    tps: float,
+    depth_s: float,
+    send_rate: float,
+    seed: int,
+    run_id: str = "0",
+    max_in_flight: int = _DEFAULT_MAX_IN_FLIGHT,
+    t0: datetime | None = None,
+    client: httpx.AsyncClient | None = None,
+    report: bool = True,
+) -> Stats:
+    """Post ``depth_s`` of history at ``send_rate``, with virtual density ``tps``.
+
+    ``t0`` is the end of the history. The default is the wall clock at the start
+    of the run. Depth must be shorter than 24 h so the oldest event is still
+    accepted when it is sent.
+    """
+    if depth_s <= 0 or depth_s >= MAX_BACKFILL_S:
+        msg = "backfill depth must be positive and shorter than 24h"
+        raise ValueError(msg)
+    if send_rate <= 0:
+        msg = "send-rate must be positive"
+        raise ValueError(msg)
+    if max_in_flight < 1:
+        msg = "max-in-flight must be positive"
+        raise ValueError(msg)
+    origin = datetime.now(UTC) if t0 is None else t0
+    if client is None:
+        async with _client() as owned:
+            return await _run_backfill(
+                owned,
+                url=url,
+                tps=tps,
+                depth_s=depth_s,
+                send_rate=send_rate,
+                seed=seed,
+                run_id=run_id,
+                max_in_flight=max_in_flight,
+                t0=origin,
+                report=report,
+            )
+    return await _run_backfill(
+        client,
+        url=url,
+        tps=tps,
+        depth_s=depth_s,
+        send_rate=send_rate,
+        seed=seed,
+        run_id=run_id,
+        max_in_flight=max_in_flight,
+        t0=origin,
         report=report,
     )
 
@@ -246,6 +311,64 @@ async def _run(
     return stats
 
 
+async def _run_backfill(
+    client: httpx.AsyncClient,
+    *,
+    url: str,
+    tps: float,
+    depth_s: float,
+    send_rate: float,
+    seed: int,
+    run_id: str,
+    max_in_flight: int,
+    t0: datetime,
+    report: bool,
+) -> Stats:
+    endpoint = url.rstrip("/") + "/v1/events"
+    clock, horizon, floor = backfill_clock(t0, timedelta(seconds=depth_s), tps)
+    stream = generate(load_config(), seed, clock, run_id=run_id, horizon=horizon, floor=floor)
+    stats = Stats()
+    lock = asyncio.Lock()
+    bucket = TokenBucket(send_rate)
+    semaphore = asyncio.Semaphore(max_in_flight)
+    pending: set[asyncio.Task[None]] = set()
+    stop = asyncio.Event()
+    reporter = asyncio.create_task(_report(stats, stop, lock)) if report else None
+    started = time.monotonic()
+
+    async def _send(payment: PaymentIn) -> None:
+        try:
+            await post_payment(client, endpoint, payment, stats, lock)
+        finally:
+            semaphore.release()
+
+    try:
+        for item in stream:
+            await bucket.acquire()
+            await semaphore.acquire()
+            _note_event_time(stats, item.payment.event_time)
+            async with lock:
+                stats.generated += 1
+            task = asyncio.create_task(_send(item.payment))
+            pending.add(task)
+            task.add_done_callback(pending.discard)
+        if pending:
+            await asyncio.gather(*pending)
+    finally:
+        stats.elapsed_s = time.monotonic() - started
+        stop.set()
+        if reporter is not None:
+            await reporter
+    return stats
+
+
+def _note_event_time(stats: Stats, event_time: datetime) -> None:
+    if stats.event_time_min is None or event_time < stats.event_time_min:
+        stats.event_time_min = event_time
+    if stats.event_time_max is None or event_time > stats.event_time_max:
+        stats.event_time_max = event_time
+
+
 async def _report(stats: Stats, stop: asyncio.Event, lock: asyncio.Lock) -> None:
     while True:
         try:
@@ -258,13 +381,14 @@ async def _report(stats: Stats, stop: asyncio.Event, lock: asyncio.Lock) -> None
 
 
 def _summary(stats: Stats) -> str:
-    snapshot = stats.to_json()
+    p50 = _percentile(stats.latencies_ms, 50)
+    p95 = _percentile(stats.latencies_ms, 95)
     return (
-        "generated={generated} sent={sent} accepted={accepted} "
-        "duplicates={duplicates} http_422={http_422} http_503={http_503} "
-        "retries={retries} failed={failed} achieved_tps={achieved_tps:.1f} "
-        "p50_ms={latency_p50_ms:.1f} p95_ms={latency_p95_ms:.1f}"
-    ).format(**snapshot)
+        f"generated={stats.generated} sent={stats.sent} accepted={stats.accepted} "
+        f"duplicates={stats.duplicates} http_422={stats.http_422} http_503={stats.http_503} "
+        f"retries={stats.retries} failed={stats.failed} achieved_tps={stats.achieved_tps:.1f} "
+        f"p50_ms={p50:.1f} p95_ms={p95:.1f}"
+    )
 
 
 def _retry_after(response: httpx.Response) -> float | None:

@@ -16,6 +16,7 @@ from pydantic import ValidationError
 from redis.asyncio import Redis
 from redis.exceptions import RedisError, ResponseError
 
+from features.metrics import WORKER_METRICS, WorkerMetrics, start_metrics_server
 from features.settings import Settings
 from features.windows import (
     DAY_MS,
@@ -240,6 +241,7 @@ class OnlineWriter:
         *,
         now_ms: Callable[[], int] = wall_now_ms,
         sleep: Sleep = asyncio.sleep,
+        metrics: WorkerMetrics | None = None,
     ) -> None:
         self.settings = settings
         self.redis = redis
@@ -247,6 +249,7 @@ class OnlineWriter:
         self.producer = producer
         self.now_ms = now_ms
         self.sleep = sleep
+        self.metrics = WORKER_METRICS if metrics is None else metrics
         self.counters = Counters()
         self._sha: str | None = None
         self._closed = False
@@ -314,6 +317,7 @@ class OnlineWriter:
         payload = record.value
         if not isinstance(payload, bytes):
             self.counters.skipped += 1
+            self.metrics.events.labels(outcome="skipped").inc()
             self._log(record, "skipped invalid record", outcome="skipped", event_id=None)
             await self._commit(record, None)
             return
@@ -322,6 +326,7 @@ class OnlineWriter:
         except ValidationError:
             event_id = event_id_from_bytes(payload)
             self.counters.skipped += 1
+            self.metrics.events.labels(outcome="skipped").inc()
             self._log(record, "skipped invalid record", outcome="skipped", event_id=event_id)
             await self._commit(record, event_id)
             return
@@ -334,6 +339,9 @@ class OnlineWriter:
                 outcome = await self._apply(event, record)
                 if seen is None:
                     seen = outcome
+                    if outcome == "applied":
+                        seconds = (self.now_ms() - to_epoch_ms(event.ingest_time)) / 1000
+                        self.metrics.event_to_online.observe(seconds)
                 if await self._should_publish(outcome, record.partition, record.offset):
                     await publish_snapshots(
                         self.producer,
@@ -351,6 +359,7 @@ class OnlineWriter:
                     if pending is not exc:
                         raise pending from exc
                     raise
+                self.metrics.apply_retries.inc()
                 self._log(
                     record,
                     "apply failed",
@@ -399,6 +408,8 @@ class OnlineWriter:
         now_ms = str(self.now_ms())
         for tp in assignment:
             position = await self.consumer.position(tp)
+            lag = ends[tp] - position
+            self.metrics.consumer_lag.labels(partition=str(tp.partition)).set(lag)
             if position >= ends[tp]:
                 await _await(self.redis.hset(watermark_key(tp.partition), "as_of_ms", now_ms))
 
@@ -475,6 +486,7 @@ class OnlineWriter:
                 backoff = min(backoff * 2, self.settings.redis_backoff_max_s)
 
     def _count(self, outcome: Outcome) -> None:
+        self.metrics.events.labels(outcome=outcome).inc()
         if outcome == "applied":
             self.counters.applied += 1
         else:
@@ -518,6 +530,7 @@ async def serve(settings: Settings) -> None:
 
 async def run(settings: Settings) -> None:
     """Run until SIGINT or SIGTERM."""
+    start_metrics_server(settings.metrics_port, WORKER_METRICS.registry)
     loop = asyncio.get_running_loop()
     task = asyncio.create_task(serve(settings), name="features-worker")
     for sig in (signal.SIGINT, signal.SIGTERM):

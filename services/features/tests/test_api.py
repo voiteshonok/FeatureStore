@@ -4,9 +4,11 @@ import logging
 import pytest
 from fakeredis import FakeAsyncRedis
 from httpx import ASGITransport, AsyncClient
+from prometheus_client import CollectorRegistry
 from redis.exceptions import ConnectionError as RedisConnectionError
 
 from features.api import JsonFormatter, _partition_count, create_app
+from features.metrics import ApiMetrics, api_metrics
 from features.settings import Settings
 from schemas import CATALOG
 
@@ -47,8 +49,12 @@ class _Pool:
         return _Connection(fail=self.fail)
 
 
-def _app(redis: object, pool: object | None = None) -> object:
-    app = create_app(Settings())
+def _app(
+    redis: object,
+    pool: object | None = None,
+    metrics: ApiMetrics | None = None,
+) -> object:
+    app = create_app(Settings(metrics_port=0), metrics=metrics)
     app.state.redis = redis
     app.state.pool = pool or _Pool()
     return app
@@ -96,6 +102,64 @@ async def test_ready_is_ok_when_both_probes_pass() -> None:
         response = await client.get("/ready")
     assert response.status_code == 200
     assert response.json() == {"status": "ready", "redis": "ok", "postgres": "ok"}
+
+
+async def test_nine_feature_values_are_counted_with_their_status() -> None:
+    registry = CollectorRegistry()
+    app = _app(FakeAsyncRedis(decode_responses=True), metrics=api_metrics(registry))
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/v1/features", json=_body())
+    assert response.status_code == 200
+    features = response.json()["features"]
+    assert len(features) == 9
+    for name, payload in features.items():
+        status = payload["status"]
+        assert status == "default"
+        assert (
+            registry.get_sample_value(
+                "features_values_total",
+                {"feature": name, "status": status},
+            )
+            == 1
+        )
+    counted = sum(
+        sample.value
+        for family in registry.collect()
+        for sample in family.samples
+        if sample.name == "features_values_total"
+    )
+    assert counted == 9
+
+
+async def test_redis_error_records_outcome_error() -> None:
+    registry = CollectorRegistry()
+    app = _app(_RedisDown(), metrics=api_metrics(registry))
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/v1/features", json=_body())
+    assert response.status_code == 503
+    assert (
+        registry.get_sample_value(
+            "features_request_duration_seconds_count",
+            {"outcome": "error"},
+        )
+        == 1
+    )
+    assert (
+        registry.get_sample_value(
+            "features_request_duration_seconds_count",
+            {"outcome": "ok"},
+        )
+        is None
+    )
+    assert (
+        registry.get_sample_value(
+            "features_values_total",
+            {"feature": "card_cnt_1m", "status": "default"},
+        )
+        is None
+    )
 
 
 async def test_redis_outage_on_read_is_503() -> None:

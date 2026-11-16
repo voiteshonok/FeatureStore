@@ -290,6 +290,7 @@ async def test_post_publishes_within_one_second_and_retries_after_outage(
             hmac_key_path=str(key_path),
             cleanup_interval_s=3600,
             ack_timeout_s=3,
+            metrics_port=0,
         )
     )
     async with app.router.lifespan_context(app):

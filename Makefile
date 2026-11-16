@@ -2,12 +2,15 @@ COMPOSE := docker compose -f infra/docker-compose.yml
 KAFKA_BOOTSTRAP := localhost:9092
 KAFKA_TOPICS := /opt/kafka/bin/kafka-topics.sh
 
-.PHONY: up down logs ps topics secret lint typecheck test test-int test-e2e clean openapi pan-scan
+.PHONY: up down logs ps topics secret lint typecheck test test-int test-e2e clean openapi pan-scan obs-up
 
 up:
 	$(COMPOSE) up -d --wait kafka postgres redis clickhouse
 	$(MAKE) topics
 	$(COMPOSE) up -d --wait ingestion features-worker features-api detection gateway
+
+obs-up:
+	$(COMPOSE) --profile obs up -d --wait prometheus
 
 down:
 	$(COMPOSE) down

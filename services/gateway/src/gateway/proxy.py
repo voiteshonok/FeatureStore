@@ -14,6 +14,8 @@ import httpx
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from gateway.metrics import GatewayMetrics
+
 TIMEOUT = httpx.Timeout(connect=0.5, read=2.0, write=2.0, pool=0.5)
 _GET_BACKOFF_S = (0.1, 0.4)
 _DROP_HEADERS = frozenset(
@@ -107,6 +109,7 @@ async def forward(
             )
         except httpx.TransportError as exc:
             last_error = exc
+            _count_upstream_error(request, service, exc)
         else:
             return passthrough(upstream, request_id)
     _log_failure(service, request, request_id, last_error)
@@ -115,6 +118,12 @@ async def forward(
         content={"detail": f"{service} unavailable"},
     )
     return unavailable
+
+
+def _count_upstream_error(request: Request, service: str, exc: httpx.TransportError) -> None:
+    metrics: GatewayMetrics = request.app.state.metrics
+    kind = "timeout" if isinstance(exc, httpx.TimeoutException) else "connect"
+    metrics.upstream_errors.labels(service=service, kind=kind).inc()
 
 
 def _log_failure(

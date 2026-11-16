@@ -23,4 +23,5 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1
 USER app
 EXPOSE 8080
+EXPOSE 9000
 CMD ["python", "-m", "gateway.api"]

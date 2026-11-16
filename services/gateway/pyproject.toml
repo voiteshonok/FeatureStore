@@ -6,6 +6,7 @@ dependencies = [
     "fastapi>=0.115",
     "httpx>=0.27",
     "limits>=2.3",
+    "prometheus-client>=0.21",
     "psycopg[binary,pool]>=3.3.8",
     "schemas",
     "slowapi>=0.1.9",

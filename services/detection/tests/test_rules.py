@@ -11,6 +11,7 @@ import pytest
 from detection.rules import (
     Clause,
     Comparison,
+    FiredAlert,
     Rule,
     apply_snapshot,
     entity_ids,
@@ -207,7 +208,7 @@ async def test_card_insert_is_idempotent_and_keeps_referenced_values() -> None:
         (rule,),
         _snapshot(card_cnt_1m=6, card_cnt_1h=3),
     )
-    assert fired == (alert_id,)
+    assert fired == (FiredAlert("card_velocity_burst", alert_id),)
     assert len(conn.sql) == 1
     assert "WHERE NOT EXISTS" in conn.sql[0]
     assert "ref.merchants" not in conn.sql[0]
@@ -228,7 +229,7 @@ async def test_merchant_alert_inserts_the_merchant_id() -> None:
         source_offset=2,
     )
     fired = await apply_snapshot(conn, (rule,), snapshot)  # type: ignore[arg-type]
-    assert fired == (alert_id,)
+    assert fired == (FiredAlert("merchant_burst", alert_id),)
     assert any("ref.merchants" in sql for sql in conn.sql)
     assert any("WHERE NOT EXISTS" in sql for sql in conn.sql)
 

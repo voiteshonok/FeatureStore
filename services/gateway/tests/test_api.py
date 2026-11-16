@@ -9,9 +9,11 @@ from uuid import UUID
 import httpx
 import pytest
 from harness import make_settings, mount, ok_json, send
+from prometheus_client import CollectorRegistry
 
 from gateway.api import export_openapi
 from gateway.logging import JsonFormatter
+from gateway.metrics import gateway_metrics
 from gateway.settings import Settings, parse_api_keys
 
 
@@ -114,6 +116,50 @@ async def test_health_does_not_check_the_key_or_upstreams() -> None:
         await gateway.aclose()
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+async def test_alert_route_label_is_the_template() -> None:
+    registry = CollectorRegistry()
+    alert_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    gateway = await mount(ok_json(), metrics=gateway_metrics(registry))
+    try:
+        response = await send(
+            gateway.app,
+            "PATCH",
+            f"/v1/alerts/{alert_id}",
+            content=b"{}",
+        )
+    finally:
+        await gateway.aclose()
+    assert response.status_code == 200
+    assert (
+        registry.get_sample_value(
+            "gateway_request_duration_seconds_count",
+            {"route": "/v1/alerts/{alert_id}", "method": "PATCH", "status": "200"},
+        )
+        == 1
+    )
+    for family in registry.collect():
+        for sample in family.samples:
+            for value in sample.labels.values():
+                assert alert_id not in value
+
+
+async def test_rate_limit_increments_the_client_counter() -> None:
+    registry = CollectorRegistry()
+    gateway = await mount(
+        ok_json(),
+        make_settings(rate_limit="1/minute"),
+        metrics=gateway_metrics(registry),
+    )
+    try:
+        first = await send(gateway.app, "POST", "/v1/features", content=b"{}")
+        second = await send(gateway.app, "POST", "/v1/features", content=b"{}")
+    finally:
+        await gateway.aclose()
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert registry.get_sample_value("gateway_rate_limited_total", {"client": "scoring"}) == 1
 
 
 async def test_rejected_auth_does_not_consume_the_rate_limit() -> None:

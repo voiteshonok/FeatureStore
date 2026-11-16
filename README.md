@@ -85,6 +85,33 @@ http://localhost:8001/docs, detection http://localhost:8002/docs, gateway
 http://localhost:8080/docs (requests need `X-API-Key`, dev keys in
 `infra/.env.example`) — exported specs in [docs/openapi/](docs/openapi/).
 
+## Metrics
+
+Prometheus is optional and scrapes the five service metrics ports (ADR-014).
+`make up` does not start it.
+
+```bash
+make up
+make obs-up
+```
+
+UI: http://127.0.0.1:9090. Target health: http://127.0.0.1:9090/targets.
+
+K1, feature-read latency p99:
+
+```promql
+histogram_quantile(0.99, sum by (le) (rate(features_request_duration_seconds_bucket[1m])))
+```
+
+K2, ingest-to-online p95:
+
+```promql
+histogram_quantile(0.95, sum by (le) (rate(features_event_to_online_seconds_bucket[1m])))
+```
+
+The same expressions are recorded as `features_request_duration_seconds:p99` and
+`features_event_to_online_seconds:p95`.
+
 ## Repository layout
 
 ```

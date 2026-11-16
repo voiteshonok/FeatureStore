@@ -24,6 +24,7 @@ from psycopg_pool import AsyncConnectionPool
 from pydantic import BaseModel, ConfigDict, Field
 
 from detection.consumer import DetectionConsumer, configure_logging
+from detection.metrics import METRICS, DetectionMetrics, start_metrics_server
 from detection.rules import RuleCache
 from detection.settings import Settings
 
@@ -193,6 +194,7 @@ async def _patch_alert(
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state.settings
+    start_metrics_server(settings.metrics_port, app.state.metrics.registry)
     configure_logging()
     pool: AsyncConnectionPool[AsyncConnection[TupleRow]] = AsyncConnectionPool(
         settings.database_url,
@@ -204,7 +206,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     service: DetectionConsumer | None = None
     await pool.open(wait=True, timeout=30)
     try:
-        service = await DetectionConsumer.connect(settings, pool, cache)
+        service = await DetectionConsumer.connect(settings, pool, cache, metrics=app.state.metrics)
         await service.reload_with_retry()
         task = asyncio.create_task(service.run(), name="detection")
         app.state.service = service
@@ -222,10 +224,15 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         await pool.close()
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    *,
+    metrics: DetectionMetrics | None = None,
+) -> FastAPI:
     """Build the detection API. Importing this module does not open connections."""
     app = FastAPI(title="detection", lifespan=_lifespan)
     app.state.settings = settings or Settings.from_env()
+    app.state.metrics = METRICS if metrics is None else metrics
 
     @app.get("/health")
     async def health() -> dict[str, str]:

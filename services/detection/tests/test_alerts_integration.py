@@ -105,6 +105,7 @@ async def test_redelivery_collapses_and_resolve_writes_one_audit_row(
         kafka_bootstrap=bootstrap,
         database_url=database.service_dsn,  # type: ignore[attr-defined]
         rule_reload_s=3600,
+        metrics_port=0,
     )
     app = create_app(settings)
     payload = _payload()

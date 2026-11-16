@@ -23,4 +23,5 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1
 USER app
 EXPOSE 8002
+EXPOSE 9000
 CMD ["uvicorn", "detection.api:app", "--host", "0.0.0.0", "--port", "8002"]

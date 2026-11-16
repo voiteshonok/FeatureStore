@@ -23,4 +23,5 @@ COPY --from=build --chown=app:app /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1
 USER app
+EXPOSE 9000
 CMD ["python", "-m", "features.worker"]

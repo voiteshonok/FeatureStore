@@ -8,7 +8,7 @@ import json
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, NamedTuple
 from uuid import UUID
 
 from psycopg import AsyncConnection
@@ -153,14 +153,21 @@ def entity_ids(snapshot: FeatureSnapshot) -> tuple[str | None, str | None]:
     return None, snapshot.entity_id
 
 
+class FiredAlert(NamedTuple):
+    """An alert row inserted for one rule. ``rule`` is the rule name."""
+
+    rule: str
+    alert_id: UUID
+
+
 async def apply_snapshot(
     conn: AsyncConnection[TupleRow],
     rules: tuple[Rule, ...],
     snapshot: FeatureSnapshot,
-) -> tuple[UUID, ...]:
-    """Insert one open alert per matching rule. Return the new alert ids."""
+) -> tuple[FiredAlert, ...]:
+    """Insert one open alert per matching rule. Return the new alerts."""
     merchant_id, card_token = entity_ids(snapshot)
-    fired: list[UUID] = []
+    fired: list[FiredAlert] = []
     async with conn.transaction():
         if merchant_id is not None:
             await conn.execute(_UPSERT_MERCHANT, (merchant_id,))
@@ -179,7 +186,7 @@ async def apply_snapshot(
                 values,
             )
             if alert_id is not None:
-                fired.append(alert_id)
+                fired.append(FiredAlert(rule.name, alert_id))
     return tuple(fired)
 
 

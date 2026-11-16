@@ -17,6 +17,7 @@ class Settings:
     partition must be refreshed inside the 5 s card ``stale_after``, so the
     heartbeat interval cannot exceed 2 s (ADR-013). ``n_partitions`` is the
     partition count of ``transactions.raw`` the API checks at startup.
+    ``metrics_port`` serves Prometheus; 0 leaves the server off (ADR-014).
     """
 
     kafka_bootstrap: str = _DEFAULT_BOOTSTRAP
@@ -29,6 +30,7 @@ class Settings:
     heartbeat_interval_s: float = 1.0
     redis_backoff_s: float = 0.5
     redis_backoff_max_s: float = 5.0
+    metrics_port: int = 9000
 
     def __post_init__(self) -> None:
         if self.n_partitions < 1:
@@ -39,6 +41,9 @@ class Settings:
             raise ValueError(msg)
         if self.redis_backoff_s <= 0 or self.redis_backoff_max_s < self.redis_backoff_s:
             msg = "redis backoff must be positive and max must cover the initial delay"
+            raise ValueError(msg)
+        if not 0 <= self.metrics_port <= 65535:
+            msg = "metrics_port must be in 0..65535"
             raise ValueError(msg)
 
     @classmethod
@@ -52,4 +57,5 @@ class Settings:
             heartbeat_interval_s=float(os.environ.get("HEARTBEAT_INTERVAL_S", "1")),
             redis_backoff_s=float(os.environ.get("REDIS_BACKOFF_S", "0.5")),
             redis_backoff_max_s=float(os.environ.get("REDIS_BACKOFF_MAX_S", "5")),
+            metrics_port=int(os.environ.get("METRICS_PORT", "9000")),
         )

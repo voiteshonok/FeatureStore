@@ -22,6 +22,7 @@ from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
 from features.freshness import serve
+from features.metrics import API_METRICS, ApiMetrics, start_metrics_server
 from features.settings import Settings
 from schemas import CATALOG, FeatureRequest, FeatureResponse, FeatureSpec
 
@@ -244,6 +245,7 @@ def _log_request(body: FeatureRequest, request_id: object, started: float) -> No
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state.settings
+    start_metrics_server(settings.metrics_port, app.state.metrics.registry)
     configure_logging()
     redis = Redis.from_url(
         settings.redis_url,
@@ -269,10 +271,15 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         await redis.aclose()
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    *,
+    metrics: ApiMetrics | None = None,
+) -> FastAPI:
     """Build the feature API. Importing this module does not open connections."""
     app = FastAPI(title="features", lifespan=_lifespan)
     app.state.settings = settings or Settings.from_env()
+    app.state.metrics = API_METRICS if metrics is None else metrics
     configure_logging()
 
     @app.get("/health")
@@ -294,6 +301,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def post_features(body: FeatureRequest, request: Request) -> FeatureResponse:
         started = time.perf_counter()
         request_id = uuid4()
+        metrics: ApiMetrics = request.app.state.metrics
         try:
             features = await serve(
                 request.app.state.redis,
@@ -302,8 +310,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 n_partitions=request.app.state.settings.n_partitions,
             )
         except RedisError:
+            metrics.request_duration.labels(outcome="error").observe(time.perf_counter() - started)
             _log_request(body, request_id, started)
             raise HTTPException(status_code=503, detail="redis unavailable") from None
+        for name, value in features.items():
+            metrics.values.labels(feature=name, status=value.status.value).inc()
+        metrics.request_duration.labels(outcome="ok").observe(time.perf_counter() - started)
         _log_request(body, request_id, started)
         return FeatureResponse(request_id=request_id, features=features)
 

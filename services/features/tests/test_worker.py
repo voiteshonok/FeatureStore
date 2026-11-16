@@ -1,13 +1,16 @@
 import json
 import logging
 from dataclasses import dataclass
+from datetime import timedelta
 
 import pytest
 from fakeredis import FakeAsyncRedis
+from prometheus_client import CollectorRegistry
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import ResponseError
 from support import BASE, make_event
 
+from features.metrics import WorkerMetrics, worker_metrics
 from features.settings import Settings
 from features.windows import merchant_key, minute_bucket, stream_specs, to_epoch_ms, watermark_key
 from features.worker import JsonFormatter, OnlineWriter, apply_event, load_script
@@ -118,6 +121,7 @@ def _writer(
     producer: FakeProducer | None = None,
     *,
     sleep: object = _noop_sleep,
+    metrics: WorkerMetrics | None = None,
 ) -> OnlineWriter:
     return OnlineWriter(
         Settings(),
@@ -126,6 +130,7 @@ def _writer(
         producer or FakeProducer(),  # type: ignore[arg-type]
         now_ms=lambda: NOW,
         sleep=sleep,  # type: ignore[arg-type]
+        metrics=metrics,
     )
 
 
@@ -361,3 +366,33 @@ async def test_heartbeat_marks_an_empty_log() -> None:
 
     assert await redis.hget(watermark_key(3), "as_of_ms") == str(NOW)
     assert await redis.hget(watermark_key(3), "offset") is None
+
+
+async def test_applied_latency_is_bucketed_and_a_duplicate_is_not() -> None:
+    registry = CollectorRegistry()
+    redis = FakeAsyncRedis(decode_responses=True)
+    writer = _writer(redis, metrics=worker_metrics(registry))
+    event = make_event(ingest_time=BASE - timedelta(milliseconds=300))
+
+    await writer.handle(Record(event.to_bytes(), offset=4))  # type: ignore[arg-type]
+
+    assert (
+        registry.get_sample_value(
+            "features_event_to_online_seconds_bucket",
+            {"le": "0.5"},
+        )
+        == 1
+    )
+    assert (
+        registry.get_sample_value(
+            "features_event_to_online_seconds_bucket",
+            {"le": "0.25"},
+        )
+        == 0
+    )
+    assert registry.get_sample_value("features_event_to_online_seconds_count") == 1
+
+    await writer.handle(Record(event.to_bytes(), offset=4))  # type: ignore[arg-type]
+
+    assert writer.counters.dup == 1
+    assert registry.get_sample_value("features_event_to_online_seconds_count") == 1

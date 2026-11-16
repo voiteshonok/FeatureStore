@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from gateway.api import create_app
+from gateway.metrics import GatewayMetrics
 from gateway.settings import Settings
 
 KEY = "dev-scoring-key"
@@ -29,6 +30,7 @@ def make_settings(
         features_url="http://features.test",
         detection_url="http://detection.test",
         database_url="postgresql://svc_gateway:featurestore@localhost/featurestore",
+        metrics_port=0,
     )
 
 
@@ -47,8 +49,9 @@ async def mount(
     handler: Handler,
     settings: Settings | None = None,
     pool: object | None = None,
+    metrics: GatewayMetrics | None = None,
 ) -> Gateway:
-    app = create_app(settings or make_settings())
+    app = create_app(settings or make_settings(), metrics=metrics)
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     app.state.client = client
     if pool is not None:

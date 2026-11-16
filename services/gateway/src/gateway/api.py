@@ -26,9 +26,11 @@ from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from starlette.requests import Request
 from starlette.responses import Response
+from starlette.routing import Match
 
 from gateway.catalog import CatalogUnavailable, read_catalog
 from gateway.logging import configure_logging
+from gateway.metrics import METRICS, GatewayMetrics, start_metrics_server
 from gateway.models import AlertOut, AlertUpdate, CatalogEntry, ErrorBody, ReadyBody, Status
 from gateway.proxy import forward, new_client
 from gateway.settings import Settings
@@ -81,6 +83,33 @@ def _authenticate(request: Request) -> str | JSONResponse:
     return client
 
 
+def _route_template(request: Request) -> str:
+    """Route template. A raw path is never a label (ADR-014)."""
+    route = request.scope.get("route")
+    path = getattr(route, "path", None)
+    if isinstance(path, str):
+        return path
+    for candidate in request.app.router.routes:
+        matches = getattr(candidate, "matches", None)
+        if matches is None:
+            continue
+        match, _child = matches(request.scope)
+        if match == Match.FULL:
+            found = getattr(candidate, "path", None)
+            if isinstance(found, str):
+                return found
+    return "unmatched"
+
+
+def _observe_request(request: Request, status: int, started: float) -> None:
+    metrics: GatewayMetrics = request.app.state.metrics
+    metrics.request_duration.labels(
+        route=_route_template(request),
+        method=request.method,
+        status=str(status),
+    ).observe(time.perf_counter() - started)
+
+
 def _log_request(
     request: Request,
     request_id: str,
@@ -123,12 +152,14 @@ def _install_middleware(app: FastAPI) -> None:
             if isinstance(authenticated, JSONResponse):
                 authenticated.headers["X-Request-ID"] = request_id
                 _log_request(request, request_id, None, authenticated.status_code, started)
+                _observe_request(request, authenticated.status_code, started)
                 return authenticated
             client = authenticated
             request.state.client = client
         response = await call_next(request)
         response.headers["X-Request-ID"] = request_id
         _log_request(request, request_id, client, response.status_code, started)
+        _observe_request(request, response.status_code, started)
         return response
 
 
@@ -149,6 +180,10 @@ def _rate_limit_exceeded(request: Request, _exc: Exception) -> JSONResponse:
     request_id = _request_id_from(request)
     if request_id:
         response.headers["X-Request-ID"] = request_id
+    metrics: GatewayMetrics = request.app.state.metrics
+    client = getattr(request.state, "client", None)
+    name = client if isinstance(client, str) and client else "anonymous"
+    metrics.rate_limited.labels(client=name).inc()
     return response
 
 
@@ -340,6 +375,7 @@ def _bind_openapi(app: FastAPI) -> None:
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state.settings
+    start_metrics_server(settings.metrics_port, app.state.metrics.registry)
     configure_logging()
     client = new_client()
     pool: AsyncConnectionPool[AsyncConnection[TupleRow]] = AsyncConnectionPool(
@@ -360,11 +396,16 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         await client.aclose()
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    *,
+    metrics: GatewayMetrics | None = None,
+) -> FastAPI:
     """Build the gateway. Importing this module does not open connections."""
     resolved = settings if settings is not None else Settings.from_env()
     app = FastAPI(title="gateway", version="0.1.0", lifespan=_lifespan)
     app.state.settings = resolved
+    app.state.metrics = METRICS if metrics is None else metrics
     configure_logging()
     limiter = Limiter(
         key_func=client_key,

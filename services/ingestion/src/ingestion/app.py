@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
@@ -21,6 +22,7 @@ from pydantic import BaseModel
 
 from ingestion.idempotency import AcceptResult, IdempotencyStore
 from ingestion.logging import JsonFormatter, PanMaskFilter, mask_pans
+from ingestion.metrics import METRICS, IngestionMetrics, start_metrics_server
 from ingestion.publisher import KafkaPublisher, PublishError
 from ingestion.tokenize import load_key, to_event
 from schemas import PaymentIn, check_event_time
@@ -33,13 +35,22 @@ Sleep = Callable[[float], Awaitable[None]]
 
 @dataclass(frozen=True)
 class Settings:
-    """Process settings taken from the environment."""
+    """Process settings taken from the environment.
+
+    ``metrics_port`` serves Prometheus; 0 leaves the server off (ADR-014).
+    """
 
     kafka_bootstrap: str = "localhost:29092"
     database_url: str = _DEFAULT_DATABASE_URL
     hmac_key_path: str | None = None
     cleanup_interval_s: float = 600.0
     ack_timeout_s: float = 10.0
+    metrics_port: int = 9000
+
+    def __post_init__(self) -> None:
+        if not 0 <= self.metrics_port <= 65535:
+            msg = "metrics_port must be in 0..65535"
+            raise ValueError(msg)
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -49,6 +60,7 @@ class Settings:
             hmac_key_path=os.environ.get("HMAC_KEY_FILE"),
             cleanup_interval_s=float(os.environ.get("CLEANUP_INTERVAL_S", "600")),
             ack_timeout_s=float(os.environ.get("KAFKA_ACK_TIMEOUT_S", "10")),
+            metrics_port=int(os.environ.get("METRICS_PORT", "9000")),
         )
 
 
@@ -124,6 +136,7 @@ async def _cleanup_loop(
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state.settings
+    start_metrics_server(settings.metrics_port, app.state.metrics.registry)
     _configure_logging()
     app.state.hmac_key = load_key(settings.hmac_key_path)
     pool: AsyncConnectionPool[AsyncConnection[TupleRow]] = AsyncConnectionPool(
@@ -151,10 +164,15 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         await pool.close()
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    *,
+    metrics: IngestionMetrics | None = None,
+) -> FastAPI:
     """Build the ingestion API. Importing this module does not open connections."""
     app = FastAPI(title="ingestion", lifespan=_lifespan)
     app.state.settings = settings or Settings.from_env()
+    app.state.metrics = METRICS if metrics is None else metrics
     app.add_exception_handler(RequestValidationError, _validation_error)
 
     @app.get("/health")
@@ -171,25 +189,38 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/v1/events", status_code=202, response_model=EventAccepted)
     async def post_event(payment: PaymentIn, request: Request) -> EventAccepted:
-        reason = check_event_time(payment.event_time, datetime.now(UTC))
-        if reason is not None:
-            raise HTTPException(status_code=422, detail=_field_error("event_time", reason))
-        event = to_event(payment, request.app.state.hmac_key, datetime.now(UTC))
+        started = time.perf_counter()
+        metrics: IngestionMetrics = request.app.state.metrics
+        status_code = 500
+        result_label = "invalid"
         try:
-            result = await request.app.state.store.accept(
-                event,
-                request.app.state.publisher.publish,
+            reason = check_event_time(payment.event_time, datetime.now(UTC))
+            if reason is not None:
+                status_code = 422
+                raise HTTPException(status_code=422, detail=_field_error("event_time", reason))
+            event = to_event(payment, request.app.state.hmac_key, datetime.now(UTC))
+            try:
+                result = await request.app.state.store.accept(
+                    event,
+                    request.app.state.publisher.publish,
+                )
+            except PublishError:
+                status_code = 503
+                result_label = "unavailable"
+                raise HTTPException(
+                    status_code=503,
+                    detail="event bus unavailable",
+                    headers={"Retry-After": "1"},
+                ) from None
+            status_code = 202
+            duplicate = result is AcceptResult.DUPLICATE
+            result_label = "duplicate" if duplicate else "accepted"
+            return EventAccepted(event_id=event.event_id, duplicate=duplicate)
+        finally:
+            metrics.events.labels(result=result_label).inc()
+            metrics.request_duration.labels(status=str(status_code)).observe(
+                time.perf_counter() - started
             )
-        except PublishError:
-            raise HTTPException(
-                status_code=503,
-                detail="event bus unavailable",
-                headers={"Retry-After": "1"},
-            ) from None
-        return EventAccepted(
-            event_id=event.event_id,
-            duplicate=result is AcceptResult.DUPLICATE,
-        )
 
     return app
 

@@ -48,7 +48,8 @@ class Settings:
 
     ``api_keys`` maps the secret to the client name used in logs and the
     rate-limit bucket. ``rate_limit`` is a limits string, default ``100/second``
-    (ADR-008).
+    (ADR-008). ``metrics_port`` serves Prometheus; 0 leaves the server off
+    (ADR-014).
     """
 
     api_keys: Mapping[str, str] = field(default_factory=dict)
@@ -56,6 +57,7 @@ class Settings:
     features_url: str = _DEFAULT_FEATURES_URL
     detection_url: str = _DEFAULT_DETECTION_URL
     database_url: str = _DEFAULT_DATABASE_URL
+    metrics_port: int = 9000
 
     def __post_init__(self) -> None:
         parsed = parse_many(self.rate_limit)
@@ -68,6 +70,9 @@ class Settings:
                 msg = "api key entries must be client:key"
                 raise ValueError(msg)
         object.__setattr__(self, "api_keys", MappingProxyType(keys))
+        if not 0 <= self.metrics_port <= 65535:
+            msg = "metrics_port must be in 0..65535"
+            raise ValueError(msg)
 
     @classmethod
     def from_env(cls) -> Self:
@@ -78,4 +83,5 @@ class Settings:
             features_url=os.environ.get("FEATURES_URL", _DEFAULT_FEATURES_URL),
             detection_url=os.environ.get("DETECTION_URL", _DEFAULT_DETECTION_URL),
             database_url=os.environ.get("DATABASE_URL", _DEFAULT_DATABASE_URL),
+            metrics_port=int(os.environ.get("METRICS_PORT", "9000")),
         )

@@ -6,7 +6,6 @@ import logging
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
-from uuid import UUID
 
 from aiokafka import AIOKafkaConsumer
 from aiokafka.structs import ConsumerRecord, TopicPartition
@@ -16,7 +15,8 @@ from psycopg.rows import TupleRow
 from psycopg_pool import AsyncConnectionPool
 from pydantic import ValidationError
 
-from detection.rules import RuleCache, apply_snapshot, load_rules
+from detection.metrics import METRICS, DetectionMetrics
+from detection.rules import FiredAlert, RuleCache, apply_snapshot, load_rules
 from detection.settings import Settings
 from schemas import FeatureSnapshot
 
@@ -94,12 +94,14 @@ class DetectionConsumer:
         consumer: AIOKafkaConsumer,
         *,
         sleep: Sleep = asyncio.sleep,
+        metrics: DetectionMetrics | None = None,
     ) -> None:
         self.settings = settings
         self.pool = pool
         self.cache = cache
         self.consumer = consumer
         self.sleep = sleep
+        self.metrics = METRICS if metrics is None else metrics
         self._started = False
         self._closed = False
 
@@ -109,6 +111,8 @@ class DetectionConsumer:
         settings: Settings,
         pool: AsyncConnectionPool[AsyncConnection[TupleRow]],
         cache: RuleCache,
+        *,
+        metrics: DetectionMetrics | None = None,
     ) -> "DetectionConsumer":
         """Build the consumer, connect to Kafka, and return it."""
         consumer = AIOKafkaConsumer(
@@ -119,7 +123,7 @@ class DetectionConsumer:
             auto_offset_reset="earliest",
             client_id="detection",
         )
-        service = cls(settings, pool, cache, consumer)
+        service = cls(settings, pool, cache, consumer, metrics=metrics)
         try:
             await service.start()
         except BaseException:
@@ -199,6 +203,7 @@ class DetectionConsumer:
         """Evaluate one snapshot, write alerts, then commit."""
         payload = record.value
         if not isinstance(payload, bytes):
+            self.metrics.snapshots.labels(outcome="skipped").inc()
             self._log("skipped invalid record", event_id=None)
             await self._commit(record, None)
             return
@@ -206,15 +211,17 @@ class DetectionConsumer:
             snapshot = FeatureSnapshot.from_bytes(payload)
         except ValidationError:
             event_id = event_id_from_bytes(payload)
+            self.metrics.snapshots.labels(outcome="skipped").inc()
             self._log("skipped invalid record", event_id=event_id)
             await self._commit(record, event_id)
             return
-        alert_ids = await self._apply_with_retry(snapshot)
-        for alert_id in alert_ids:
-            self._log_fire(snapshot, alert_id)
+        fired = await self._apply_with_retry(snapshot)
+        self.metrics.snapshots.labels(outcome="applied").inc()
+        for alert in fired:
+            self._log_fire(snapshot, alert)
         await self._commit(record, str(snapshot.event_id))
 
-    async def _apply_with_retry(self, snapshot: FeatureSnapshot) -> tuple[UUID, ...]:
+    async def _apply_with_retry(self, snapshot: FeatureSnapshot) -> tuple[FiredAlert, ...]:
         backoff = self.settings.backoff_s
         while True:
             try:
@@ -279,8 +286,11 @@ class DetectionConsumer:
             exc_info=_exc_info(exc) if exc is not None else None,
         )
 
-    def _log_fire(self, snapshot: FeatureSnapshot, alert_id: UUID) -> None:
+    def _log_fire(self, snapshot: FeatureSnapshot, alert: FiredAlert) -> None:
+        self.metrics.alerts.labels(rule=alert.rule).inc()
+        elapsed = (datetime.now(UTC) - snapshot.ingest_time).total_seconds()
+        self.metrics.event_to_alert.observe(elapsed if elapsed > 0 else 0.0)
         logging.getLogger("detection").info(
             "alert fired",
-            extra={"event_id": str(snapshot.event_id), "alert_id": str(alert_id)},
+            extra={"event_id": str(snapshot.event_id), "alert_id": str(alert.alert_id)},
         )

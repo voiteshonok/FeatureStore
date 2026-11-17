@@ -41,10 +41,11 @@ testpaths = [
     "services/detection/tests",
     "services/gateway/tests",
     "experiments/baseline/tests",
+    "experiments/load/tests",
     "tools/pan_scan/tests",
     "tests/e2e",
 ]
-pythonpath = ["tools"]
+pythonpath = ["tools", "experiments/load"]
 markers = [
     "integration: tests that require running infrastructure",
     "e2e: end-to-end tests against the compose stack",
@@ -78,6 +79,7 @@ src = [
     "services/detection/src",
     "services/gateway/src",
     "experiments/baseline/src",
+    "experiments/load",
     "tools",
 ]
 
@@ -101,6 +103,7 @@ mypy_path = [
     "services/detection/src",
     "services/gateway/src",
     "experiments/baseline/src",
+    "experiments/load",
     "tools",
 ]
 exclude = [

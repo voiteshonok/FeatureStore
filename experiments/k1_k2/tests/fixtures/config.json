@@ -1,0 +1,10 @@
+{
+  "backfill": {
+    "depth": "30s",
+    "tps": 200,
+    "send_rate": 2000,
+    "achieved_tps": 128.5
+  },
+  "load_generator": "k6 ran on the same host as the Docker Compose stand (colocated)",
+  "measurement_limits": "Warm-up depth 30s is not a full-day ADR-002 replay."
+}

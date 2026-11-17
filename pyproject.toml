@@ -42,10 +42,11 @@ testpaths = [
     "services/gateway/tests",
     "experiments/baseline/tests",
     "experiments/load/tests",
+    "experiments/k1_k2/tests",
     "tools/pan_scan/tests",
     "tests/e2e",
 ]
-pythonpath = ["tools", "experiments/load"]
+pythonpath = ["tools", "experiments/load", "experiments/k1_k2"]
 markers = [
     "integration: tests that require running infrastructure",
     "e2e: end-to-end tests against the compose stack",
@@ -80,6 +81,7 @@ src = [
     "services/gateway/src",
     "experiments/baseline/src",
     "experiments/load",
+    "experiments/k1_k2",
     "tools",
 ]
 
@@ -89,6 +91,7 @@ select = ["E", "F", "I", "B", "UP", "S", "ASYNC"]
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S101"]
 "simulator/src/**" = ["S311"]
+"experiments/k1_k2/run.py" = ["S603", "S607"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -104,6 +107,7 @@ mypy_path = [
     "services/gateway/src",
     "experiments/baseline/src",
     "experiments/load",
+    "experiments/k1_k2",
     "tools",
 ]
 exclude = [

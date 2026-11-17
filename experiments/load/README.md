@@ -144,5 +144,6 @@ SMOKE=1 k6 run -e TARGET=direct -e HOST=localhost -e SMOKE=1 \
 
 ## Artifacts
 
-`tokens.json` and `experiments/load/runs/` are gitignored. Pass
-`TOKENS_FILE` if the token file is not at `experiments/load/tokens.json`.
+`tokens.json` and `experiments/load/runs/` are gitignored. By default k6 reads
+`tokens.json` next to `features.js` (`open()` is script-relative). Pass an
+absolute `TOKENS_FILE` to override.

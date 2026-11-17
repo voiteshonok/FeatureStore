@@ -4,7 +4,7 @@ PROFILES := --profile baseline --profile obs --profile sim
 KAFKA_BOOTSTRAP := localhost:9092
 KAFKA_TOPICS := /opt/kafka/bin/kafka-topics.sh
 
-.PHONY: up down logs ps topics secret lint typecheck test test-int test-e2e clean openapi pan-scan obs-up baseline-up backfill
+.PHONY: up down logs ps topics secret lint typecheck test test-int test-e2e clean openapi pan-scan obs-up baseline-up backfill exp-k1k2 exp-k1k2-short
 
 up:
 	$(COMPOSE) up -d --wait kafka postgres redis clickhouse
@@ -25,7 +25,18 @@ backfill:
 		--tps $(or $(TPS),200) \
 		--send-rate $(or $(SEND_RATE),2000) \
 		--seed $(or $(SEED),42) \
+		--run-id $(or $(RUN_ID),warm) \
 		--url http://ingestion:8000
+
+# First K1/K2 + Redis memory pack → experiments/results/<date>-k1-k2/
+# Default warm-up BACKFILL=30s (fast catch-up). Override BACKFILL=3m or 23h as needed.
+exp-k1k2:
+	PATH="$(HOME)/.local/bin:$(PATH)" PYTHONPATH=experiments/k1_k2 \
+		uv run python experiments/k1_k2/run.py
+
+exp-k1k2-short:
+	PATH="$(HOME)/.local/bin:$(PATH)" MODE=short PYTHONPATH=experiments/k1_k2 \
+		uv run python experiments/k1_k2/run.py
 
 down:
 	$(COMPOSE) $(PROFILES) down

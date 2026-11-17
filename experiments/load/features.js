@@ -31,7 +31,8 @@ const host = __ENV.HOST || "localhost";
 const apiKey = __ENV.API_KEY || "dev-scoring-key";
 const rate = smoke ? 20 : Number(__ENV.RATE || 200);
 const duration = smoke ? "15s" : __ENV.DURATION || "10m";
-const tokensFile = __ENV.TOKENS_FILE || "experiments/load/tokens.json";
+// open() is resolved relative to this script's directory.
+const tokensFile = __ENV.TOKENS_FILE || "tokens.json";
 
 const tokens = new SharedArray("tokens", () => {
   const raw = open(tokensFile);
@@ -65,6 +66,7 @@ export const options = {
     },
   },
   thresholds,
+  summaryTrendStats: ["avg", "min", "med", "max", "p(50)", "p(90)", "p(95)", "p(99)"],
 };
 
 const url = `http://${host}:${target.port}/v1/features`;

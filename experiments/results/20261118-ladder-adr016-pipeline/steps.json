@@ -1,0 +1,95 @@
+{
+  "knee": {
+    "rate": 100,
+    "reason": "p99=2066.4ms \u226b 20ms, error_rate=12.16%"
+  },
+  "steps": [
+    {
+      "duration": "30s",
+      "ended_unix": 1794960174.3568301,
+      "error_classes": {
+        "2xx_check_fail": 0,
+        "429": 0,
+        "4xx": 0,
+        "503": 0,
+        "other": 0,
+        "timeout": 0
+      },
+      "error_rate": 0.0,
+      "k6_exit_code": 0,
+      "p50_ms": 14.0917015,
+      "p99_ms": 24.309346259999998,
+      "rate": 20,
+      "samples": {
+        "features_api_cpu_pct_avg": 24.994999999999997,
+        "features_api_cpu_pct_max": 27.33,
+        "features_consumer_lag_max": 0.0,
+        "hmget_calls_per_sec": 1605.256627090061,
+        "n_samples": 4,
+        "redis_cpu_pct_avg": 2.3449999999999998,
+        "redis_cpu_pct_max": 2.59,
+        "redis_ops_per_sec_avg": 1675.0,
+        "redis_ops_per_sec_max": 1837
+      },
+      "started_unix": 1794960143.6343899
+    },
+    {
+      "duration": "30s",
+      "ended_unix": 1794960205.2906334,
+      "error_classes": {
+        "2xx_check_fail": 0,
+        "429": 0,
+        "4xx": 0,
+        "503": 0,
+        "other": 0,
+        "timeout": 0
+      },
+      "error_rate": 0.0,
+      "k6_exit_code": 0,
+      "p50_ms": 14.328531,
+      "p99_ms": 28.959693,
+      "rate": 50,
+      "samples": {
+        "features_api_cpu_pct_avg": 93.7425,
+        "features_api_cpu_pct_max": 146.34,
+        "features_consumer_lag_max": 0.0,
+        "hmget_calls_per_sec": 4007.9543182879993,
+        "n_samples": 4,
+        "redis_cpu_pct_avg": 6.965,
+        "redis_cpu_pct_max": 11.02,
+        "redis_ops_per_sec_avg": 4155.75,
+        "redis_ops_per_sec_max": 4519
+      },
+      "started_unix": 1794960174.598149
+    },
+    {
+      "duration": "30s",
+      "ended_unix": 1794960236.623244,
+      "error_classes": {
+        "2xx_check_fail": 0,
+        "429": 0,
+        "4xx": 0,
+        "503": 358,
+        "other": 0,
+        "timeout": 0
+      },
+      "error_rate": 0.1216445803601767,
+      "k6_exit_code": 0,
+      "p50_ms": 751.690977,
+      "p99_ms": 2066.39530102,
+      "rate": 100,
+      "samples": {
+        "features_api_cpu_pct_avg": 122.4375,
+        "features_api_cpu_pct_max": 176.64,
+        "features_consumer_lag_max": 0.0,
+        "hmget_calls_per_sec": 7291.476739681178,
+        "n_samples": 4,
+        "redis_cpu_pct_avg": 9.83,
+        "redis_cpu_pct_max": 15.71,
+        "redis_ops_per_sec_avg": 6873.0,
+        "redis_ops_per_sec_max": 7815
+      },
+      "started_unix": 1794960205.608242
+    }
+  ]
+}

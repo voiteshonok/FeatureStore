@@ -1,0 +1,124 @@
+{
+  "knee": {
+    "rate": 20,
+    "reason": "p99=10678.9ms \u226b 20ms"
+  },
+  "steps": [
+    {
+      "duration": "2m",
+      "ended_unix": 1794959462.8533144,
+      "error_classes": {
+        "2xx_check_fail": 0,
+        "429": 0,
+        "4xx": 0,
+        "503": 0,
+        "other": 0,
+        "timeout": 0
+      },
+      "error_rate": 0.0,
+      "k6_exit_code": 0,
+      "p50_ms": 8892.992051,
+      "p99_ms": 10678.880862099999,
+      "rate": 20,
+      "samples": {
+        "features_api_cpu_pct_avg": 100.79866666666666,
+        "features_api_cpu_pct_max": 154.02,
+        "features_consumer_lag_max": 0.0,
+        "hmget_calls_per_sec": 15106.104567313469,
+        "n_samples": 15,
+        "redis_cpu_pct_avg": 5.625333333333333,
+        "redis_cpu_pct_max": 14.7,
+        "redis_ops_per_sec_avg": 12800.533333333333,
+        "redis_ops_per_sec_max": 22424
+      },
+      "started_unix": 1794959335.6793973
+    },
+    {
+      "duration": "2m",
+      "ended_unix": 1794959595.0405316,
+      "error_classes": {
+        "2xx_check_fail": 0,
+        "429": 0,
+        "4xx": 0,
+        "503": 0,
+        "other": 0,
+        "timeout": 0
+      },
+      "error_rate": 0.0,
+      "k6_exit_code": 0,
+      "p50_ms": 8423.012394,
+      "p99_ms": 12864.516473399999,
+      "rate": 50,
+      "samples": {
+        "features_api_cpu_pct_avg": 105.31466666666667,
+        "features_api_cpu_pct_max": 185.43,
+        "features_consumer_lag_max": 0.0,
+        "hmget_calls_per_sec": 15671.726905275287,
+        "n_samples": 15,
+        "redis_cpu_pct_avg": 5.348,
+        "redis_cpu_pct_max": 12.34,
+        "redis_ops_per_sec_avg": 11373.0,
+        "redis_ops_per_sec_max": 22404
+      },
+      "started_unix": 1794959466.7285976
+    },
+    {
+      "duration": "2m",
+      "ended_unix": 1794959727.5450876,
+      "error_classes": {
+        "2xx_check_fail": 0,
+        "429": 0,
+        "4xx": 0,
+        "503": 5050,
+        "other": 0,
+        "timeout": 0
+      },
+      "error_rate": 0.9546313799621928,
+      "k6_exit_code": 0,
+      "p50_ms": 3063.3521215,
+      "p99_ms": 12975.94176826,
+      "rate": 100,
+      "samples": {
+        "features_api_cpu_pct_avg": 111.286,
+        "features_api_cpu_pct_max": 173.19,
+        "features_consumer_lag_max": 0.0,
+        "hmget_calls_per_sec": 14352.114316743413,
+        "n_samples": 15,
+        "redis_cpu_pct_avg": 5.4193333333333324,
+        "redis_cpu_pct_max": 12.35,
+        "redis_ops_per_sec_avg": 15982.866666666667,
+        "redis_ops_per_sec_max": 27031
+      },
+      "started_unix": 1794959596.793278
+    },
+    {
+      "duration": "2m",
+      "ended_unix": 1794959858.8688474,
+      "error_classes": {
+        "2xx_check_fail": 0,
+        "429": 0,
+        "4xx": 0,
+        "503": 16261,
+        "other": 0,
+        "timeout": 0
+      },
+      "error_rate": 0.9912221883572082,
+      "k6_exit_code": 0,
+      "p50_ms": 1934.695502,
+      "p99_ms": 10199.456642840001,
+      "rate": 200,
+      "samples": {
+        "features_api_cpu_pct_avg": 106.99533333333333,
+        "features_api_cpu_pct_max": 155.36,
+        "features_consumer_lag_max": 0.0,
+        "hmget_calls_per_sec": 10981.176249767626,
+        "n_samples": 15,
+        "redis_cpu_pct_avg": 6.471333333333334,
+        "redis_cpu_pct_max": 13.16,
+        "redis_ops_per_sec_avg": 10741.533333333333,
+        "redis_ops_per_sec_max": 24347
+      },
+      "started_unix": 1794959727.5479913
+    }
+  ]
+}

@@ -23,8 +23,23 @@ API_LATENCY_BUCKETS_S = (
     0.25,
 )
 
-# 2 s is the K2 bound (ADR-014).
-FRESHNESS_BUCKETS_S = (0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0)
+# 2 s is the K2 bound (ADR-014). Finite ceiling 300 s; beyond that is +Inf
+# (report as "> 300 s", never as a fake finite p95).
+FRESHNESS_BUCKETS_S = (
+    0.01,
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    1.0,
+    2.0,
+    5.0,
+    10.0,
+    30.0,
+    60.0,
+    120.0,
+    300.0,
+)
 
 _started_ports: set[int] = set()
 
@@ -94,8 +109,15 @@ WORKER_METRICS = worker_metrics()
 
 
 def start_metrics_server(port: int, registry: CollectorRegistry) -> None:
-    """Serve ``registry``. ``0`` leaves the server off. A second start is a no-op."""
+    """Serve ``registry``. ``0`` leaves the server off. A second start is a no-op.
+
+    When uvicorn runs multiple workers, only the first process binds the port;
+    siblings ignore ``EADDRINUSE``.
+    """
     if port <= 0 or port in _started_ports:
         return
-    start_http_server(port, registry=registry)
+    try:
+        start_http_server(port, registry=registry)
+    except OSError:
+        return
     _started_ports.add(port)

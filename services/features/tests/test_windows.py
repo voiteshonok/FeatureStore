@@ -2,14 +2,17 @@ from uuid import uuid4
 
 from fakeredis import FakeAsyncRedis
 from support import at_ms
+from support_merchant import seed_merchant_minute
 
 from features.windows import (
+    MERCHANT_BUCKETS,
     MINUTE_MS,
     card_key,
     card_stream_features,
     format_geo,
     member,
-    merchant_key,
+    merchant_features_key,
+    merchant_read_plan,
     merchant_stream_features,
     minute_bucket,
     parse_geo,
@@ -92,18 +95,49 @@ async def test_event_exactly_one_minute_back_is_outside_the_window() -> None:
     assert features["card_sum_1h"] == 16
 
 
+def test_merchant_read_plan_uses_hours_and_edge_minutes() -> None:
+    # Window covering >2 hours: full middle hours + partial edges.
+    current = 10_000  # 10000 % 60 == 40 → current hour incomplete
+    first = current - MERCHANT_BUCKETS + 1
+    hours, minutes = merchant_read_plan(first, current)
+    assert hours
+    assert minutes
+    assert max(hours) == current // 60 - 1
+    assert current in minutes
+    covered = set(minutes)
+    for hour in hours:
+        covered.update(range(hour * 60, hour * 60 + 60))
+    assert covered == set(range(first, current + 1))
+    assert len(hours) + len(minutes) < MERCHANT_BUCKETS
+
+
+def test_merchant_read_plan_complete_current_hour_is_hourly() -> None:
+    current = 10_019  # last minute of hour 166
+    first = current - MERCHANT_BUCKETS + 1
+    hours, minutes = merchant_read_plan(first, current)
+    assert current // 60 in hours
+    assert current not in minutes
+
+
 async def test_merchant_window_uses_1440_minute_buckets() -> None:
     redis = FakeAsyncRedis(decode_responses=True)
     t_ms = to_epoch_ms(at_ms(1_781_000_000_000))
     current = minute_bucket(t_ms)
-    await redis.hset(merchant_key("m", current), mapping={"count": 2, "sum": 50, "declined": 1})
-    await redis.hset(
-        merchant_key("m", current - 1439),
-        mapping={"count": 3, "sum": 30, "declined": 0},
+    first = current - MERCHANT_BUCKETS + 1
+    await seed_merchant_minute(
+        redis, "m", current, first=first, current=current, count=2, declined=1
     )
+    await seed_merchant_minute(
+        redis, "m", current - 1439, first=first, current=current, count=3, declined=0
+    )
+    # Outside the window — must not count (write onto minute field directly).
+    key = merchant_features_key("m")
     await redis.hset(
-        merchant_key("m", current - 1440),
-        mapping={"count": 9, "sum": 90, "declined": 9},
+        key,
+        mapping={
+            f"m:{current - 1440}:c": 9,
+            f"m:{current - 1440}:d": 9,
+        },
     )
 
     features = await merchant_stream_features(redis, "m", t_ms)

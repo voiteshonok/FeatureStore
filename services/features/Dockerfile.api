@@ -12,6 +12,7 @@ COPY pyproject.toml uv.lock ./
 COPY libs libs
 COPY services services
 COPY simulator simulator
+COPY experiments/baseline experiments/baseline
 
 RUN uv sync --frozen --package features --no-dev --no-editable
 

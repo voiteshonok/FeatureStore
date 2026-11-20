@@ -133,6 +133,7 @@ flowchart TB
 - Every service exposes `GET /health` (liveness, no I/O) and `GET /ready`
   (dependency probes with timeouts).
 - Resource limits are set per container; data lives in named volumes.
+- The optional `baseline` profile (ADR-015) runs the SQL measurement stand (`baseline-api` on port 8003) and is not a business service; `make up` does not start it, and the `baseline` schema is not a product bounded context.
 - Prometheus is the optional `obs` profile (`127.0.0.1:9090`) and scrapes each
   service on port 9000. Grafana and Alertmanager are not in this compose file.
 

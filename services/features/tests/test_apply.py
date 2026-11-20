@@ -9,8 +9,9 @@ from features.windows import (
     card_key,
     format_geo,
     geo_key,
+    hour_bucket,
     member,
-    merchant_key,
+    merchant_features_key,
     minute_bucket,
     to_epoch_ms,
     watermark_key,
@@ -33,8 +34,14 @@ async def test_apply_writes_card_merchant_geo_and_watermark() -> None:
     assert result == "applied"
     event_ms = to_epoch_ms(event.event_time)
     assert await redis.zrange(card_key(event.card_token), 0, -1) == [member(event.event_id, 180)]
-    bucket = merchant_key(event.merchant_id, minute_bucket(event_ms))
-    assert await redis.hgetall(bucket) == {"count": "1", "sum": "180", "declined": "1"}
+    feat = merchant_features_key(event.merchant_id)
+    minute = minute_bucket(event_ms)
+    hour = hour_bucket(event_ms)
+    assert await redis.hget(feat, f"m:{minute}:c") == "1"
+    assert await redis.hget(feat, f"m:{minute}:s") == "180"
+    assert await redis.hget(feat, f"m:{minute}:d") == "1"
+    assert await redis.hget(feat, f"h:{hour}:c") == "1"
+    assert await redis.hget(feat, f"h:{hour}:d") == "1"
     assert await redis.get(geo_key(event.card_token)) == format_geo(52.5, 13.4, event_ms)
     assert await redis.hgetall(watermark_key(2)) == {
         "offset": "7",
@@ -53,12 +60,15 @@ async def test_apply_skips_offset_at_or_below_watermark() -> None:
     older = await apply_event(redis, sha, make_event(), partition=0, offset=4, now_ms=now_ms)
     assert again == "dup"
     assert older == "dup"
-    bucket = merchant_key(first.merchant_id, minute_bucket(now_ms))
-    assert await redis.hget(bucket, "count") == "1"
+    feat = merchant_features_key(first.merchant_id)
+    minute = minute_bucket(now_ms)
+    assert await redis.hget(feat, f"m:{minute}:c") == "1"
+    assert await redis.hget(feat, f"h:{hour_bucket(now_ms)}:c") == "1"
 
     nxt = await apply_event(redis, sha, make_event(), partition=0, offset=6, now_ms=now_ms)
     assert nxt == "applied"
-    assert await redis.hget(bucket, "count") == "2"
+    assert await redis.hget(feat, f"m:{minute}:c") == "2"
+    assert await redis.hget(feat, f"h:{hour_bucket(now_ms)}:c") == "2"
 
 
 async def test_bucket_ttl_is_set_on_first_touch_only() -> None:
@@ -67,14 +77,14 @@ async def test_bucket_ttl_is_set_on_first_touch_only() -> None:
     now_ms = to_epoch_ms(BASE)
     event = make_event()
     await apply_event(redis, sha, event, partition=1, offset=0, now_ms=now_ms)
-    bucket = merchant_key(event.merchant_id, minute_bucket(now_ms))
-    ttl = await redis.ttl(bucket)
+    feat = merchant_features_key(event.merchant_id)
+    ttl = await redis.ttl(feat)
     assert 0 < ttl <= MERCHANT_TTL_S
 
-    await redis.expire(bucket, 10)
+    await redis.expire(feat, 10)
     await apply_event(redis, sha, make_event(), partition=1, offset=1, now_ms=now_ms)
 
-    assert await redis.ttl(bucket) <= 10
+    assert await redis.ttl(feat) <= 10
 
 
 async def test_card_member_older_than_24h_is_trimmed() -> None:
@@ -93,8 +103,9 @@ async def test_card_member_older_than_24h_is_trimmed() -> None:
 
     assert await redis.zcard(card_key(event.card_token)) == 0
     assert await redis.get(geo_key(event.card_token)) is None
-    bucket = merchant_key(event.merchant_id, minute_bucket(old_ms))
-    assert await redis.hget(bucket, "count") == "1"
+    feat = merchant_features_key(event.merchant_id)
+    minute = minute_bucket(old_ms)
+    assert await redis.hget(feat, f"m:{minute}:c") == "1"
 
 
 def from_ms(epoch_ms: int) -> object:

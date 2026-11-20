@@ -330,7 +330,19 @@ def export_openapi(path: str) -> None:
 
 
 def main() -> None:
-    uvicorn.run(app, host="0.0.0.0", port=_PORT)  # noqa: S104
+    import os
+
+    workers = int(os.environ.get("FEATURES_API_WORKERS", "1"))
+    # Import string is required when workers > 1 (each worker loads the app).
+    if workers <= 1:
+        uvicorn.run(app, host="0.0.0.0", port=_PORT)  # noqa: S104
+        return
+    uvicorn.run(
+        "features.api:app",
+        host="0.0.0.0",  # noqa: S104
+        port=_PORT,
+        workers=workers,
+    )
 
 
 app = create_app()

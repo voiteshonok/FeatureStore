@@ -1,0 +1,28 @@
+{
+  "created_at": "2026-11-18T00:03:56.802142+00:00",
+  "docker_info": {
+    "mem_total": "32729808896",
+    "ncpu": "12"
+  },
+  "duration": "30s",
+  "git_sha": "35728a8e429fa72d1cd3554884f45a8fc916c610",
+  "host": {
+    "cpu_count": 12,
+    "hostname": "hp",
+    "mem_total": "31962704 kB",
+    "platform": "Linux-7.0.0-43-generic-x86_64-with-glibc2.43"
+  },
+  "hypothesis": "merchant_stream_features issues 1440 HMGET per request; expect cmdstat_hmget \u2248 1440 \u00d7 successful requests and Redis CPU knee",
+  "knee": {
+    "rate": 100,
+    "reason": "p99=2066.4ms \u226b 20ms, error_rate=12.16%"
+  },
+  "no_backfill": true,
+  "rates": [
+    20,
+    50,
+    100
+  ],
+  "simulator": "off",
+  "target": "direct"
+}

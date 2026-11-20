@@ -1,0 +1,104 @@
+{
+  "runs": [
+    {
+      "baseline_event_to_store_p95_seconds": null,
+      "ended_unix": 1794957454.9539456,
+      "features_event_to_online_p95_seconds": null,
+      "k6_exit_code": 0,
+      "range": "1m",
+      "started_unix": 1794957379.0926285,
+      "status_counts": {
+        "default": 19.636363636363633,
+        "fresh": 216.0
+      },
+      "status_shares": {
+        "default": 0.08333333333333333,
+        "fresh": 0.9166666666666667
+      },
+      "target": "direct"
+    },
+    {
+      "baseline_event_to_store_p95_seconds": null,
+      "ended_unix": 1794957531.95508,
+      "features_event_to_online_p95_seconds": null,
+      "k6_exit_code": 0,
+      "range": "1m",
+      "started_unix": 1794957465.0513961,
+      "status_counts": {
+        "default": 0.0,
+        "fresh": 0.0
+      },
+      "status_shares": {},
+      "target": "gateway"
+    },
+    {
+      "baseline_event_to_store_p95_seconds": null,
+      "ended_unix": 1794957604.3093622,
+      "features_event_to_online_p95_seconds": null,
+      "k6_exit_code": 0,
+      "range": "1m",
+      "started_unix": 1794957542.0280683,
+      "status_counts": {
+        "default": 0.0,
+        "fresh": 0.0
+      },
+      "status_shares": {},
+      "target": "baseline"
+    }
+  ],
+  "status_counts": {
+    "default": 19.636363636363633,
+    "fresh": 216.0
+  },
+  "status_shares": {
+    "default": 0.08333333333333333,
+    "fresh": 0.9166666666666667
+  },
+  "windows": {
+    "baseline": {
+      "baseline_event_to_store_p95_seconds": 0.7575581395348829,
+      "ended_unix": 1794957604.3093622,
+      "features_event_to_online_p95_seconds": 30.0,
+      "k6_exit_code": 0,
+      "range": "1m",
+      "started_unix": 1794957542.0280683,
+      "status_counts": {
+        "default": 0.0,
+        "fresh": 0.0
+      },
+      "status_shares": {},
+      "target": "baseline"
+    },
+    "direct": {
+      "baseline_event_to_store_p95_seconds": 0.7575581395348829,
+      "ended_unix": 1794957454.9539456,
+      "features_event_to_online_p95_seconds": 30.0,
+      "k6_exit_code": 0,
+      "range": "1m",
+      "started_unix": 1794957379.0926285,
+      "status_counts": {
+        "default": 19.636363636363633,
+        "fresh": 216.0
+      },
+      "status_shares": {
+        "default": 0.08333333333333333,
+        "fresh": 0.9166666666666667
+      },
+      "target": "direct"
+    },
+    "gateway": {
+      "baseline_event_to_store_p95_seconds": 0.7575581395348829,
+      "ended_unix": 1794957531.95508,
+      "features_event_to_online_p95_seconds": 30.0,
+      "k6_exit_code": 0,
+      "range": "1m",
+      "started_unix": 1794957465.0513961,
+      "status_counts": {
+        "default": 0.0,
+        "fresh": 0.0
+      },
+      "status_shares": {},
+      "target": "gateway"
+    }
+  }
+}

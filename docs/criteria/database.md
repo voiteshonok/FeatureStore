@@ -28,7 +28,9 @@ pipeline depends on (one open alert per subject) live in the schema as partial
 unique indexes, not in consumer code. Two further engines serve workloads
 PostgreSQL is not shaped for — Redis as the online feature store (ms-level reads,
 ADR-002) and ClickHouse as the offline store (append-heavy history, ADR-004) —
-with PostgreSQL remaining the system of record for everything above.
+with PostgreSQL remaining the system of record for everything above. The
+`baseline` schema is a measurement stand (ADR-015), not a product bounded
+context.
 
 ### Alternatives considered
 
@@ -53,6 +55,7 @@ startup upsert keeps them consistent and versions accumulate as history.
 
 - Roles (env-based passwords): `infra/postgres/00-roles.sh`
 - DDL: `infra/postgres/10-schema.sql` · Seed: `infra/postgres/20-seed.sql`
+- Baseline stand (not a product schema): `infra/postgres/30-baseline.sql`, role `svc_baseline`
 - Data dictionary, ER diagram, integrity, versioning:
   [`docs/db/data-dictionary.md`](../db/data-dictionary.md)
 - Consumers of the schema: `services/detection` (rules, alerts, audit via
@@ -66,7 +69,7 @@ startup upsert keeps them consistent and versions accumulate as history.
 | 1 | Data dictionary | ✅ | docs/db/data-dictionary.md |
 | 2 | Integrity and transaction handling described | ✅ | data-dictionary.md §Integrity; ADR-003 |
 | 3 | Logical schema / ER diagram | ✅ | data-dictionary.md §ER |
-| 4 | DDL script | ✅ | infra/postgres/10-schema.sql |
+| 4 | DDL script | ✅ | infra/postgres/10-schema.sql, 30-baseline.sql |
 | 5 | Modern relational DBMS | ✅ | PostgreSQL 17 |
 | 6 | 3NF, enough tables, different relationship types | ✅ | 9 tables; 1:N and clause-level M:N |
 | 7 | PK/FK, CHECKs, meaningful types everywhere | ✅ | 10-schema.sql (incl. XOR subject check, status⇔resolved_at) |

@@ -11,6 +11,7 @@ COPY pyproject.toml uv.lock ./
 COPY libs libs
 COPY services services
 COPY simulator simulator
+COPY experiments/baseline experiments/baseline
 
 RUN uv sync --frozen --package simulator --no-dev --no-editable \
     && /app/.venv/bin/python -c "import simulator.config, pathlib; path = pathlib.Path(simulator.config.__file__).with_name('profile.yaml'); assert path.is_file(), path"

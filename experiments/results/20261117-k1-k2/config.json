@@ -1,0 +1,174 @@
+{
+  "GATEWAY_RATE_LIMIT": "400/second",
+  "backfill": {
+    "achieved_tps": null,
+    "depth": "30s",
+    "send_rate": 2000.0,
+    "tps": 200.0
+  },
+  "container_memory_limits": {
+    "baseline-api": "512m",
+    "baseline-writer": "512m",
+    "clickhouse": "4g",
+    "detection": "512m",
+    "features-api": "512m",
+    "features-worker": "512m",
+    "gateway": "512m",
+    "ingestion": "512m",
+    "kafka": "2g",
+    "postgres": "8g",
+    "prometheus": "512m",
+    "redis": "3g"
+  },
+  "created_at": "2026-11-17T23:20:16.076766+00:00",
+  "git_sha": "a706de84e61ddcf08a41a51e042e031e4ce1d1d6",
+  "host": {
+    "cpu_count": 12,
+    "hostname": "hp",
+    "mem_total": "31962704 kB",
+    "platform": "Linux-7.0.0-43-generic-x86_64-with-glibc2.43",
+    "python": "3.13.13"
+  },
+  "images": [
+    {
+      "ContainerName": "infra-postgres-1",
+      "Created": "2026-11-05T07:30:45.291083939Z",
+      "ID": "sha256:ff87138949ad9a46f32ff23bd6852b52ce024a13dffe9b4087be98292cdd3b4f",
+      "LastTagTime": "2026-11-07T14:37:28.033842536Z",
+      "Platform": "linux/amd64",
+      "Repository": "postgres",
+      "Size": 161373073,
+      "Tag": "17"
+    },
+    {
+      "ContainerName": "infra-baseline-writer-1",
+      "Created": "2026-11-18T00:02:17.256763982+02:00",
+      "ID": "sha256:74847be6718af496d3e0f67eff3a84a79c83253445246c933ea5f107c64251df",
+      "LastTagTime": "2026-11-17T22:49:39.310749426Z",
+      "Platform": "linux/amd64",
+      "Repository": "infra-baseline-writer",
+      "Size": 58662019,
+      "Tag": "latest"
+    },
+    {
+      "ContainerName": "infra-gateway-1",
+      "Created": "2026-11-18T00:02:13.492746556+02:00",
+      "ID": "sha256:ab7f05c222f160943cb7b2d924b5e85cdda090ae1f5f9c091e09fc33a9b0cd32",
+      "LastTagTime": "2026-11-17T22:49:39.249250297Z",
+      "Platform": "linux/amd64",
+      "Repository": "infra-gateway",
+      "Size": 58464840,
+      "Tag": "latest"
+    },
+    {
+      "ContainerName": "infra-kafka-1",
+      "Created": "2024-10-26T22:22:16.402925795Z",
+      "ID": "sha256:fbc7d7c428e3755cf36518d4976596002477e4c052d1f80b5b9eafd06d0fff2f",
+      "LastTagTime": "2026-11-07T14:37:33.352279973Z",
+      "Platform": "linux/amd64",
+      "Repository": "apache/kafka",
+      "Size": 217726768,
+      "Tag": "3.9.0"
+    },
+    {
+      "ContainerName": "infra-redis-1",
+      "Created": "2026-11-05T07:36:42.330039317Z",
+      "ID": "sha256:1f88291b4c57bdf249f02eb085a8669889b2d2954e91d4de5118a5da6b78dd53",
+      "LastTagTime": "2026-11-07T14:37:29.3701332Z",
+      "Platform": "linux/amd64",
+      "Repository": "redis",
+      "Size": 55618749,
+      "Tag": "8"
+    },
+    {
+      "ContainerName": "infra-ingestion-1",
+      "Created": "2026-11-17T23:31:05.422094433+02:00",
+      "ID": "sha256:6ee5450d867658275f3161ebd6726c1499acb73f6ccedc9cb5f6775c66d22cc9",
+      "LastTagTime": "2026-11-17T23:16:05.243689161Z",
+      "Platform": "linux/amd64",
+      "Repository": "infra-ingestion",
+      "Size": 58652717,
+      "Tag": "latest"
+    },
+    {
+      "ContainerName": "infra-features-api-1",
+      "Created": "2026-11-18T00:02:18.595826264+02:00",
+      "ID": "sha256:593b2a1ab3fa2ef2c52227910f6466e365a8557c26df1b7a07c54b0ece645bdc",
+      "LastTagTime": "2026-11-17T22:49:39.300289652Z",
+      "Platform": "linux/amd64",
+      "Repository": "infra-features-api",
+      "Size": 60255650,
+      "Tag": "latest"
+    },
+    {
+      "ContainerName": "infra-baseline-api-1",
+      "Created": "2026-11-18T00:02:17.256763982+02:00",
+      "ID": "sha256:7fe7e285399f301d1e859a5d130ec3a4c35c7d1e32c7009eedf971eb176ed823",
+      "LastTagTime": "2026-11-17T22:49:39.27346424Z",
+      "Platform": "linux/amd64",
+      "Repository": "infra-baseline-api",
+      "Size": 58662161,
+      "Tag": "latest"
+    },
+    {
+      "ContainerName": "infra-features-worker-1",
+      "Created": "2026-11-18T00:02:18.595826264+02:00",
+      "ID": "sha256:1ab0e88100ca7d12c4634df5e6de879544bd471531d74e7d6788b896ff10b502",
+      "LastTagTime": "2026-11-17T22:49:39.304004195Z",
+      "Platform": "linux/amd64",
+      "Repository": "infra-features-worker",
+      "Size": 60255508,
+      "Tag": "latest"
+    },
+    {
+      "ContainerName": "infra-detection-1",
+      "Created": "2026-11-18T00:02:18.709480188+02:00",
+      "ID": "sha256:cdf6b3722c0a3b4f3b10d4b36c8dfd1c2956d75cbc0defa0cf908011e67fd392",
+      "LastTagTime": "2026-11-17T22:49:39.283885325Z",
+      "Platform": "linux/amd64",
+      "Repository": "infra-detection",
+      "Size": 58661863,
+      "Tag": "latest"
+    },
+    {
+      "ContainerName": "infra-clickhouse-1",
+      "Created": "2026-02-02T14:58:35.521903281Z",
+      "ID": "sha256:b627d7a9bc0e0c1bac26cdbe9d2fc6316faa29c5d8a174f28f5abd57d0fa6ba2",
+      "LastTagTime": "2026-11-07T14:37:35.367376022Z",
+      "Platform": "linux/amd64",
+      "Repository": "clickhouse/clickhouse-server",
+      "Size": 206352754,
+      "Tag": "25.3"
+    },
+    {
+      "ContainerName": "infra-prometheus-1",
+      "Created": "2026-11-05T15:43:10.325824601Z",
+      "ID": "sha256:e04987641b57704f408e31f6373ba4138ecf27cb4a165d24aabb6c38fddd0f06",
+      "LastTagTime": "2026-11-16T20:56:29.2109665Z",
+      "Platform": "linux/amd64",
+      "Repository": "prom/prometheus",
+      "Size": 116090172,
+      "Tag": "v3.16.0"
+    }
+  ],
+  "k6": {
+    "duration": "1m",
+    "pause_s": 10,
+    "rate": 200,
+    "targets": [
+      "direct",
+      "gateway",
+      "baseline"
+    ]
+  },
+  "live_run_id": "live",
+  "load_generator": "k6 ran on the same host as the Docker Compose stand (colocated)",
+  "measurement_limits": "Warm-up depth 30s is not a full-day ADR-002 replay; 24h windows are only partially filled; Redis memory is not comparable to the ~1.5 GB day estimate.",
+  "mode": "short",
+  "prom_url": "http://127.0.0.1:9090",
+  "seed": 42,
+  "simulator_duration": "260s",
+  "validity": "INVALID",
+  "validity_note": "Pipeline failure only; do not use for K1/K2 diploma claims. See report.md.",
+  "warm_run_id": "warm"
+}

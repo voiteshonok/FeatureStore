@@ -1,0 +1,26 @@
+{
+  "created_at": "2026-11-18T00:53:49.608153+00:00",
+  "docker_info": {
+    "mem_total": "32729808896",
+    "ncpu": "12"
+  },
+  "duration": "30s",
+  "git_sha": "35728a8e429fa72d1cd3554884f45a8fc916c610",
+  "host": {
+    "cpu_count": 12,
+    "hostname": "hp",
+    "mem_total": "31962704 kB",
+    "platform": "Linux-7.0.0-43-generic-x86_64-with-glibc2.43"
+  },
+  "hypothesis": "merchant read path: ADR-016 two-level buckets (~23 hourly + \u2264120 minute HMGET/req). Pre-ADR-016 baseline was 1440 HMGET/req.",
+  "knee": {
+    "rate": 200,
+    "reason": "p99=942.2ms \u226b 20ms"
+  },
+  "no_backfill": true,
+  "rates": [
+    200
+  ],
+  "simulator": "off",
+  "target": "direct"
+}

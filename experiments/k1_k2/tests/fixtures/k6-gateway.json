@@ -1,0 +1,19 @@
+{
+  "metrics": {
+    "http_req_duration": {
+      "p(50)": 3.0,
+      "p(99)": 12.0
+    },
+    "http_req_failed": {
+      "value": 0.0002,
+      "passes": 2,
+      "fails": 9998
+    },
+    "err_2xx_check_fail": { "count": 0 },
+    "err_4xx": { "count": 1 },
+    "err_429": { "count": 0 },
+    "err_503": { "count": 1 },
+    "err_timeout": { "count": 0 },
+    "err_other": { "count": 0 }
+  }
+}

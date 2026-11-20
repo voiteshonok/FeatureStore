@@ -100,6 +100,17 @@ services:
       SVC_FEATURES_PASSWORD: ${SVC_FEATURES_PASSWORD:-svc_features_dev}
       SVC_DETECTION_PASSWORD: ${SVC_DETECTION_PASSWORD:-svc_detection_dev}
       SVC_GATEWAY_PASSWORD: ${SVC_GATEWAY_PASSWORD:-svc_gateway_dev}
+      SVC_BASELINE_PASSWORD: ${SVC_BASELINE_PASSWORD:-svc_baseline_dev}
+    # ADR-015: a day of baseline.transactions is about 7 GB. 1g and 3g measure disk.
+    command:
+      [
+        "postgres",
+        "-c",
+        "shared_buffers=1GB",
+        "-c",
+        "effective_cache_size=6GB",
+      ]
+    shm_size: 1gb
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres:/docker-entrypoint-initdb.d:ro
@@ -116,7 +127,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1g
+          memory: 8g
 
   ingestion:
     build:
@@ -194,6 +205,7 @@ services:
       DATABASE_URL: postgresql://svc_features:${SVC_FEATURES_PASSWORD:-svc_features_dev}@postgres:5432/${POSTGRES_DB:-featurestore}
       N_PARTITIONS: "4"
       METRICS_PORT: "9000"
+      FEATURES_API_WORKERS: ${FEATURES_API_WORKERS:-4}  # 8 did not improve 200 RPS p99
     depends_on:
       kafka:
         condition: service_healthy
@@ -216,7 +228,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512m
+          memory: 1g
 
   detection:
     build:
@@ -282,6 +294,70 @@ services:
       timeout: 5s
       retries: 12
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  baseline-writer:
+    profiles: ["baseline"]
+    build:
+      context: ..
+      dockerfile: experiments/baseline/Dockerfile
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      DATABASE_URL: postgresql://svc_baseline:${SVC_BASELINE_PASSWORD:-svc_baseline_dev}@postgres:5432/${POSTGRES_DB:-featurestore}
+      METRICS_PORT: "9000"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import os; os.kill(1, 0)",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  baseline-api:
+    profiles: ["baseline"]
+    build:
+      context: ..
+      dockerfile: experiments/baseline/Dockerfile.api
+    ports:
+      - "8003:8003"
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      DATABASE_URL: postgresql://svc_baseline:${SVC_BASELINE_PASSWORD:-svc_baseline_dev}@postgres:5432/${POSTGRES_DB:-featurestore}
+      METRICS_PORT: "9000"
+      BASELINE_POOL_MIN_SIZE: "4"
+      BASELINE_POOL_MAX_SIZE: "16"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8003/ready')",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     deploy:
       resources:
         limits:

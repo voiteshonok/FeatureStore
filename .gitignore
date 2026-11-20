@@ -156,6 +156,10 @@ activemq-data/
 secrets/
 node_modules/
 
+# k6 load experiment artifacts (T3.5)
+experiments/load/tokens.json
+experiments/load/runs/
+
 # Environments
 .env
 .envrc

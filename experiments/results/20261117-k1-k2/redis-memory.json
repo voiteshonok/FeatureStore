@@ -1,0 +1,24 @@
+{
+  "adr_002_estimate_gb": 1.5,
+  "card_keys": {
+    "count": 1000,
+    "max_bytes": 309,
+    "p50_bytes": 150,
+    "p99_bytes": 203,
+    "sum_bytes": 158435
+  },
+  "dbsize": 16296,
+  "maxmemory": 0,
+  "mbkt_keys": {
+    "count": 1000,
+    "max_bytes": 83,
+    "p50_bytes": 82,
+    "p99_bytes": 83,
+    "sum_bytes": 82139
+  },
+  "note": "ADR-002 ~1.5 GB assumes a day of history; a short warm-up will be lower.",
+  "used_memory": 4867672,
+  "used_memory_gb": 0.0045333728194236755,
+  "used_memory_human": "4.64M",
+  "used_memory_rss": 27774976
+}

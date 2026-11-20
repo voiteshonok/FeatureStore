@@ -1,8 +1,10 @@
 COMPOSE := docker compose -f infra/docker-compose.yml
+# `up` does not enable profiles. `down` must, or those containers keep the network.
+PROFILES := --profile baseline --profile obs --profile sim
 KAFKA_BOOTSTRAP := localhost:9092
 KAFKA_TOPICS := /opt/kafka/bin/kafka-topics.sh
 
-.PHONY: up down logs ps topics secret lint typecheck test test-int test-e2e clean openapi pan-scan obs-up
+.PHONY: up down logs ps topics secret lint typecheck test test-int test-e2e clean openapi pan-scan obs-up baseline-up backfill exp-k1k2 exp-k1k2-short exp-ladder
 
 up:
 	$(COMPOSE) up -d --wait kafka postgres redis clickhouse
@@ -12,14 +14,43 @@ up:
 obs-up:
 	$(COMPOSE) --profile obs up -d --wait prometheus
 
+baseline-up:
+	$(COMPOSE) --profile baseline up -d --wait baseline-writer baseline-api
+
+# One-shot history fill. Does not start with --profile sim.
+# 3m at 200 TPS is 36,000 primary events: about 5 minutes at ~130 posts/s.
+backfill:
+	$(COMPOSE) --profile sim run --build --rm simulator \
+		--backfill $(or $(BACKFILL),3m) \
+		--tps $(or $(TPS),200) \
+		--send-rate $(or $(SEND_RATE),2000) \
+		--seed $(or $(SEED),42) \
+		--run-id $(or $(RUN_ID),warm) \
+		--url http://ingestion:8000
+
+# First K1/K2 + Redis memory pack → experiments/results/<date>-k1-k2/
+# Default warm-up BACKFILL=30s (fast catch-up). Override BACKFILL=3m or 23h as needed.
+exp-k1k2:
+	PATH="$(HOME)/.local/bin:$(PATH)" PYTHONPATH=experiments/k1_k2 \
+		uv run python experiments/k1_k2/run.py
+
+exp-k1k2-short:
+	PATH="$(HOME)/.local/bin:$(PATH)" MODE=short PYTHONPATH=experiments/k1_k2 \
+		uv run python experiments/k1_k2/run.py
+
+# Direct-only read ladder 20/50/100/200 × 2m → experiments/results/<date>-ladder/
+exp-ladder:
+	PATH="$(HOME)/.local/bin:$(PATH)" PYTHONPATH=experiments/k1_k2 \
+		uv run python experiments/k1_k2/ladder.py
+
 down:
-	$(COMPOSE) down
+	$(COMPOSE) $(PROFILES) down
 
 logs:
-	$(COMPOSE) logs -f --tail=100
+	$(COMPOSE) $(PROFILES) logs -f --tail=100
 
 ps:
-	$(COMPOSE) ps
+	$(COMPOSE) $(PROFILES) ps
 
 topics:
 	$(COMPOSE) exec -T kafka $(KAFKA_TOPICS) --bootstrap-server $(KAFKA_BOOTSTRAP) \
@@ -59,4 +90,4 @@ pan-scan:
 	PYTHONPATH=tools uv run python -m pan_scan
 
 clean:
-	$(COMPOSE) down -v
+	$(COMPOSE) $(PROFILES) down -v

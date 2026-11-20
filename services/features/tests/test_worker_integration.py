@@ -17,7 +17,7 @@ from support import make_event
 from features.settings import Settings
 from features.windows import (
     card_stream_features,
-    merchant_key,
+    merchant_features_key,
     minute_bucket,
     read_offset,
     stream_specs,
@@ -224,11 +224,12 @@ async def test_worker_is_replay_safe_and_publishes_snapshots(
             features = await card_stream_features(redis, token, query_ms)
             assert features["card_cnt_1m"] == expected == _PER_CARD
 
-        bucket = merchant_key("m-1", minute_bucket(to_epoch_ms(base)))
-        fields = await redis.hgetall(bucket)
-        assert int(fields["count"]) == len(events)
-        assert int(fields["sum"]) == sum(event.amount_minor for event in events)
-        assert int(fields["declined"]) == sum(event.status == "declined" for event in events)
+        feat = merchant_features_key("m-1")
+        minute = minute_bucket(to_epoch_ms(base))
+        fields = await redis.hgetall(feat)
+        assert int(fields[f"m:{minute}:c"]) == len(events)
+        assert int(fields[f"m:{minute}:s"]) == sum(event.amount_minor for event in events)
+        assert int(fields[f"m:{minute}:d"]) == sum(event.status == "declined" for event in events)
 
         snapshots = await _snapshots(bootstrap, settings.updates_topic, len(events) * 2)
         assert len(snapshots) == len(events) * 2
@@ -250,7 +251,7 @@ async def test_worker_is_replay_safe_and_publishes_snapshots(
             assert last.features["card_cnt_1m"] == _PER_CARD
             assert last.features["card_sum_1m"] == sum(event.amount_minor for event in card_events)
 
-        before = await redis.hgetall(bucket)
+        before = await redis.hgetall(feat)
         await _stop(task)
         await _reset_when_idle(bootstrap, settings.group_id, settings.raw_topic)
         task = asyncio.create_task(serve(settings))
@@ -261,7 +262,7 @@ async def test_worker_is_replay_safe_and_publishes_snapshots(
             settings.raw_topic,
             committed,
         )
-        assert await redis.hgetall(bucket) == before
+        assert await redis.hgetall(feat) == before
     finally:
         if not task.done():
             await _stop(task)

@@ -3,12 +3,12 @@ from uuid import uuid4
 
 from fakeredis import FakeAsyncRedis
 from support import BASE
+from support_merchant import seed_merchant_event
 
 from features.freshness import from_epoch_ms, serve
 from features.windows import (
     card_key,
     member,
-    merchant_key,
     minute_bucket,
     stream_specs,
     to_epoch_ms,
@@ -52,9 +52,13 @@ async def _card_event(redis: FakeAsyncRedis, when_ms: int, amount: int = 40) -> 
 
 
 async def _merchant_bucket(redis: FakeAsyncRedis, when_ms: int) -> None:
-    await redis.hset(
-        merchant_key(_MERCHANT, minute_bucket(when_ms)),
-        mapping={"count": "2", "sum": "80", "declined": "1"},
+    await seed_merchant_event(
+        redis,
+        _MERCHANT,
+        minute_bucket(when_ms),
+        count=2,
+        declined=1,
+        amount=80,
     )
 
 

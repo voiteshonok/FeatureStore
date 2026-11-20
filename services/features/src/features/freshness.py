@@ -1,5 +1,6 @@
 """ADR-013 freshness for one card and merchant at a caller-supplied now."""
 
+import asyncio
 from datetime import UTC, datetime
 
 from redis.asyncio import Redis
@@ -7,7 +8,6 @@ from redis.asyncio import Redis
 from features.geo import velocity_kmh
 from features.windows import (
     _await,
-    card_key,
     card_stream_features,
     geo_key,
     merchant_stream_features,
@@ -63,35 +63,31 @@ async def _watermarks(redis: Redis, n_partitions: int) -> list[int | None]:
     return parsed
 
 
-async def _card_features(
-    redis: Redis,
-    request: FeatureRequest,
+def _card_from_values(
+    values: dict[str, int | float] | None,
     *,
-    now_ms: int,
     as_of_ms: int | None,
+    now_ms: int,
 ) -> dict[str, FeatureValue]:
     specs = stream_specs("card")
-    if as_of_ms is None:
+    if as_of_ms is None or values is None:
         return {spec.name: _default(spec) for spec in specs}
-    size = int(await _await(redis.zcard(card_key(request.card_token))))
-    if size == 0:
+    if all(values[spec.name] == 0 for spec in specs):
+        # Empty zset yields zeros; treat as default (no as_of).
         return {spec.name: _default(spec) for spec in specs}
-    values = await card_stream_features(redis, request.card_token, now_ms)
     return {spec.name: _measured(spec, values[spec.name], as_of_ms, now_ms) for spec in specs}
 
 
-async def _merchant_features(
-    redis: Redis,
-    request: FeatureRequest,
+def _merchant_from_values(
+    values: dict[str, int | float],
     *,
-    now_ms: int,
     watermarks: list[int | None],
+    now_ms: int,
 ) -> dict[str, FeatureValue]:
     specs = stream_specs("merchant")
     present = [value for value in watermarks if value is not None]
     if len(present) != len(watermarks):
         return {spec.name: _default(spec) for spec in specs}
-    values = await merchant_stream_features(redis, request.merchant_id, now_ms)
     count_name = next(spec.name for spec in specs if spec.agg == "count")
     if values[count_name] == 0:
         return {spec.name: _default(spec) for spec in specs}
@@ -99,10 +95,13 @@ async def _merchant_features(
     return {spec.name: _measured(spec, values[spec.name], as_of_ms, now_ms) for spec in specs}
 
 
-async def _geo_feature(redis: Redis, request: FeatureRequest, spec: FeatureSpec) -> FeatureValue:
+def _geo_from_raw(
+    raw: object,
+    request: FeatureRequest,
+    spec: FeatureSpec,
+) -> FeatureValue:
     if request.lat is None or request.lon is None:
         return _default(spec)
-    raw = await _await(redis.get(geo_key(request.card_token)))
     if not isinstance(raw, str):
         return _default(spec)
     origin_lat, origin_lon, origin_ms = parse_geo(raw)
@@ -119,6 +118,12 @@ async def _geo_feature(redis: Redis, request: FeatureRequest, spec: FeatureSpec)
     return FeatureValue(value=speed, status=FeatureStatus.fresh)
 
 
+async def _geo_raw(redis: Redis, request: FeatureRequest) -> object:
+    if request.lat is None or request.lon is None:
+        return None
+    return await _await(redis.get(geo_key(request.card_token)))
+
+
 async def serve(
     redis: Redis,
     request: FeatureRequest,
@@ -128,26 +133,32 @@ async def serve(
 ) -> dict[str, FeatureValue]:
     """Every catalog feature for the card and merchant at ``now``.
 
+    Watermarks, card window, merchant window and geo are fetched concurrently
+    (one Lua EVAL for the merchant sum) to cut Redis RTT stacking.
+
     ``request.ts`` is not the window clock. Geo-velocity uses it only as the
     time of the request coordinates.
     """
     now_ms = to_epoch_ms(now)
-    watermarks = await _watermarks(redis, n_partitions)
     partition = partition_for(request.card_token, n_partitions)
-    card = await _card_features(
-        redis,
-        request,
-        now_ms=now_ms,
-        as_of_ms=watermarks[partition],
+    watermarks, card_values, merchant_values, geo_raw = await asyncio.gather(
+        _watermarks(redis, n_partitions),
+        card_stream_features(redis, request.card_token, now_ms),
+        merchant_stream_features(redis, request.merchant_id, now_ms),
+        _geo_raw(redis, request),
     )
-    merchant = await _merchant_features(
-        redis,
-        request,
+    card = _card_from_values(
+        card_values,
+        as_of_ms=watermarks[partition],
         now_ms=now_ms,
+    )
+    merchant = _merchant_from_values(
+        merchant_values,
         watermarks=watermarks,
+        now_ms=now_ms,
     )
     geo_spec = next(spec for spec in CATALOG if spec.agg == "geo_velocity")
-    geo = await _geo_feature(redis, request, geo_spec)
+    geo = _geo_from_raw(geo_raw, request, geo_spec)
     ordered: dict[str, FeatureValue] = {}
     for spec in CATALOG:
         if spec.agg == "geo_velocity":

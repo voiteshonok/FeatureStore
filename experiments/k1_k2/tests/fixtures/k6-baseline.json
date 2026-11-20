@@ -8,6 +8,12 @@
       "value": 0.0,
       "passes": 0,
       "fails": 10000
-    }
+    },
+    "err_2xx_check_fail": { "count": 0 },
+    "err_4xx": { "count": 0 },
+    "err_429": { "count": 0 },
+    "err_503": { "count": 0 },
+    "err_timeout": { "count": 0 },
+    "err_other": { "count": 0 }
   }
 }

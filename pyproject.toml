@@ -92,6 +92,7 @@ select = ["E", "F", "I", "B", "UP", "S", "ASYNC"]
 "**/tests/**" = ["S101"]
 "simulator/src/**" = ["S311"]
 "experiments/k1_k2/run.py" = ["S603", "S607"]
+"experiments/k1_k2/ladder.py" = ["S603", "S607"]
 
 [tool.mypy]
 python_version = "3.12"

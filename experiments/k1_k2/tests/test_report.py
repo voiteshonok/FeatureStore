@@ -3,7 +3,12 @@ from pathlib import Path
 
 import pytest
 
-from report import ReportError, build_report, require_targets
+from report import (
+    ReportError,
+    assess_validity,
+    build_report,
+    require_targets,
+)
 
 _FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
@@ -31,6 +36,10 @@ def test_build_report_table_from_fixtures() -> None:
     assert "50.00M" in report
     assert "128.5 posts/s" in report
     assert "colocated" in report
+    assert "## Error classes (k6)" in report
+    assert "| gateway | 0 | 1 | 0 | 1 | 0 | 0 |" in report
+    assert "validity: **VALID**" in report
+    assert "K2 finite histogram ceiling: **300 s**" in report
 
 
 def test_missing_target_is_explicit_error() -> None:
@@ -56,3 +65,73 @@ def test_build_report_rejects_missing_run() -> None:
             redis_memory=_load("redis-memory.json"),
             config=_load("config.json"),
         )
+
+
+def test_missing_window_k2_marks_invalid() -> None:
+    prom = _load("prometheus.json")
+    prom["windows"]["direct"]["features_event_to_online_p95_seconds"] = None
+    validity, reasons = assess_validity(
+        k6_by_target={
+            "direct": _load("k6-direct.json"),
+            "gateway": _load("k6-gateway.json"),
+            "baseline": _load("k6-baseline.json"),
+        },
+        prometheus=prom,
+    )
+    assert validity == "INVALID"
+    assert any("null features_event_to_online_p95_seconds" in reason for reason in reasons)
+    report = build_report(
+        k6_by_target={
+            "direct": _load("k6-direct.json"),
+            "gateway": _load("k6-gateway.json"),
+            "baseline": _load("k6-baseline.json"),
+        },
+        prometheus=prom,
+        redis_memory=_load("redis-memory.json"),
+        config=_load("config.json"),
+    )
+    assert "— (INVALID)" in report
+
+
+def test_inf_k2_renders_as_gt_ceiling() -> None:
+    prom = _load("prometheus.json")
+    prom["windows"]["direct"]["features_event_to_online_p95_seconds"] = 300.0
+    prom["windows"]["direct"]["features_event_to_online_p95_at_inf"] = True
+    report = build_report(
+        k6_by_target={
+            "direct": _load("k6-direct.json"),
+            "gateway": _load("k6-gateway.json"),
+            "baseline": _load("k6-baseline.json"),
+        },
+        prometheus=prom,
+        redis_memory=_load("redis-memory.json"),
+        config=_load("config.json"),
+    )
+    assert "> 300 с" in report
+
+
+def test_error_rate_over_one_percent_forces_invalid() -> None:
+    direct = _load("k6-direct.json")
+    direct["metrics"]["http_req_failed"]["value"] = 0.05
+    validity, reasons = assess_validity(
+        k6_by_target={
+            "direct": direct,
+            "gateway": _load("k6-gateway.json"),
+            "baseline": _load("k6-baseline.json"),
+        },
+        prometheus=_load("prometheus.json"),
+    )
+    assert validity == "INVALID"
+    assert any("direct error rate" in reason for reason in reasons)
+    report = build_report(
+        k6_by_target={
+            "direct": direct,
+            "gateway": _load("k6-gateway.json"),
+            "baseline": _load("k6-baseline.json"),
+        },
+        prometheus=_load("prometheus.json"),
+        redis_memory=_load("redis-memory.json"),
+        config=_load("config.json"),
+    )
+    assert "validity: INVALID" in report
+    assert "— (INVALID)" in report

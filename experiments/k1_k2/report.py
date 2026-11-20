@@ -5,17 +5,31 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from prometheus import K2_FINITE_CEILING_S
+
 
 class ReportError(ValueError):
     """Raised when a required run artifact is missing or malformed."""
 
 
 _TARGETS = ("baseline", "direct", "gateway")
+_K1_TARGETS = ("direct", "gateway")
 _ADR_REDIS_GB = 1.5
 _K1_P99_MS = 20.0
 _K1_P50_MS = 5.0
 _K2_P95_S = 2.0
-_ERR_RATE = 0.001
+_ERR_RATE_GOAL = 0.001
+# Pack validity: any K1 target above this → INVALID (stricter goal stays 0.1%).
+_ERR_RATE_INVALID = 0.01
+_INVALID_CELL = "— (INVALID)"
+_ERROR_CLASS_KEYS = (
+    "2xx_check_fail",
+    "4xx",
+    "429",
+    "503",
+    "timeout",
+    "other",
+)
 
 
 def k1_p99_ms(summary: Mapping[str, Any]) -> float:
@@ -45,6 +59,18 @@ def error_rate(summary: Mapping[str, Any]) -> float:
     raise ReportError(msg)
 
 
+def error_classes(summary: Mapping[str, Any]) -> dict[str, int]:
+    """Return per-class error counts from k6 custom counters."""
+    metrics = summary.get("metrics")
+    if not isinstance(metrics, Mapping):
+        return {key: 0 for key in _ERROR_CLASS_KEYS}
+    out: dict[str, int] = {}
+    for key in _ERROR_CLASS_KEYS:
+        metric = metrics.get(f"err_{key}")
+        out[key] = _counter_count(metric)
+    return out
+
+
 def require_targets(
     k6_by_target: Mapping[str, Mapping[str, Any] | None],
 ) -> dict[str, Mapping[str, Any]]:
@@ -57,6 +83,44 @@ def require_targets(
             raise ReportError(msg)
         out[name] = summary
     return out
+
+
+def assess_validity(
+    *,
+    k6_by_target: Mapping[str, Mapping[str, Any]],
+    prometheus: Mapping[str, Any],
+    lag: Mapping[str, Any] | None = None,
+) -> tuple[str, list[str]]:
+    """Return ``(VALID|INVALID, reasons)``.
+
+    Gates: non-zero consumer lag at measurement, K1-target error rate > 1%,
+    or missing in-window K2 for any target.
+    """
+    reasons: list[str] = []
+    lag_payload = lag if isinstance(lag, Mapping) else prometheus.get("lag", {})
+    if isinstance(lag_payload, Mapping):
+        for name in ("features", "baseline"):
+            raw = lag_payload.get(name)
+            if raw is None:
+                continue
+            if float(raw) != 0.0:
+                reasons.append(f"consumer lag {name}={raw} ≠ 0")
+    for name in _K1_TARGETS:
+        summary = k6_by_target.get(name)
+        if summary is None:
+            continue
+        rate = error_rate(summary)
+        if rate > _ERR_RATE_INVALID:
+            reasons.append(f"{name} error rate {rate:.4%} > {_ERR_RATE_INVALID:.0%} INVALID gate")
+    windows = prometheus.get("windows")
+    if isinstance(windows, Mapping):
+        for name in _TARGETS:
+            try:
+                _k2_value(windows, name)
+            except ReportError as exc:
+                reasons.append(str(exc))
+    validity = "INVALID" if reasons else "VALID"
+    return validity, reasons
 
 
 def build_report(
@@ -73,43 +137,85 @@ def build_report(
         msg = "prometheus.json missing windows"
         raise ReportError(msg)
 
+    validity, validity_reasons = assess_validity(
+        k6_by_target=summaries,
+        prometheus=prometheus,
+        lag=config.get("lag") if isinstance(config.get("lag"), Mapping) else None,
+    )
+    invalid = validity == "INVALID"
+
+    def cell_ms(target: str, fn: Any) -> str:
+        if invalid:
+            return _INVALID_CELL
+        return _fmt_ms(fn(summaries[target]))
+
+    def cell_pct(target: str) -> str:
+        if invalid:
+            return _INVALID_CELL
+        return _fmt_pct(error_rate(summaries[target]))
+
+    def cell_k2(target: str) -> str:
+        if invalid:
+            return _INVALID_CELL
+        value, at_inf = _k2_value(windows, target)
+        return _fmt_s(value, at_inf=at_inf)
+
     rows = [
         (
             "K1: p99 /v1/features, 200 RPS",
             f"≤ {_K1_P99_MS:g} мс",
-            _fmt_ms(k1_p99_ms(summaries["baseline"])),
-            _fmt_ms(k1_p99_ms(summaries["direct"])),
-            _fmt_ms(k1_p99_ms(summaries["gateway"])),
+            cell_ms("baseline", k1_p99_ms),
+            cell_ms("direct", k1_p99_ms),
+            cell_ms("gateway", k1_p99_ms),
         ),
         (
             "K1: p50",
             f"≤ {_K1_P50_MS:g} мс",
-            _fmt_ms(k1_p50_ms(summaries["baseline"])),
-            _fmt_ms(k1_p50_ms(summaries["direct"])),
-            _fmt_ms(k1_p50_ms(summaries["gateway"])),
+            cell_ms("baseline", k1_p50_ms),
+            cell_ms("direct", k1_p50_ms),
+            cell_ms("gateway", k1_p50_ms),
         ),
         (
             "K2: p95 событие → хранилище",
             f"≤ {_K2_P95_S:g} с",
-            _fmt_s(_k2(windows, "baseline")),
-            _fmt_s(_k2(windows, "direct")),
-            _fmt_s(_k2(windows, "gateway")),
+            cell_k2("baseline"),
+            cell_k2("direct"),
+            cell_k2("gateway"),
         ),
         (
             "Доля ошибок",
-            f"< {_ERR_RATE * 100:g}%",
-            _fmt_pct(error_rate(summaries["baseline"])),
-            _fmt_pct(error_rate(summaries["direct"])),
-            _fmt_pct(error_rate(summaries["gateway"])),
+            f"< {_ERR_RATE_GOAL * 100:g}%",
+            cell_pct("baseline"),
+            cell_pct("direct"),
+            cell_pct("gateway"),
         ),
     ]
 
+    title = "# K1 / K2 report" + (" — INVALID" if invalid else "")
     lines = [
-        "# K1 / K2 report",
+        title,
         "",
-        "| Показатель | Цель | Baseline | Online напрямую | Online через gateway |",
-        "|---|---|---|---|---|",
     ]
+    if invalid:
+        lines.extend(
+            [
+                f"**validity: {validity}**",
+                "",
+                "Goal table cells are omitted from pass/fail interpretation.",
+                "",
+            ]
+        )
+        if validity_reasons:
+            lines.append("Validity gates failed:")
+            lines.extend(f"- {reason}" for reason in validity_reasons)
+            lines.append("")
+
+    lines.extend(
+        [
+            "| Показатель | Цель | Baseline | Online напрямую | Online через gateway |",
+            "|---|---|---|---|---|",
+        ]
+    )
     for row in rows:
         lines.append("| " + " | ".join(row) + " |")
 
@@ -127,8 +233,35 @@ def build_report(
     lines.extend(
         [
             "",
+            "## Error classes (k6)",
+            "",
+            "| Target | 2xx_check_fail | 4xx | 429 | 503 | timeout | other |",
+            "|---|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
+    for name in _TARGETS:
+        classes = error_classes(summaries[name])
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    name,
+                    *(str(classes[key]) for key in _ERROR_CLASS_KEYS),
+                ]
+            )
+            + " |"
+        )
+
+    lines.extend(
+        [
+            "",
             "## Notes",
             "",
+            f"- validity: **{validity}**.",
+            f"- K2 finite histogram ceiling: **{K2_FINITE_CEILING_S:g} s**; "
+            f"mass beyond that is reported as `> {K2_FINITE_CEILING_S:g} с`, "
+            "never as a fake finite p95. K2 uses only the k6 window "
+            "(`increase(...[DURATION])`); no cumulative fallback.",
             f"- Redis `used_memory` = **{used_gb:.3f} GB** "
             f"(`{redis_memory.get('used_memory_human', '?')}`), "
             f"DBSIZE = {redis_memory.get('dbsize', '?')}. "
@@ -142,16 +275,22 @@ def build_report(
             f"fresh={_share(status, 'fresh')}, "
             f"stale={_share(status, 'stale')}, "
             f"default={_share(status, 'default')}.",
+            f"- GATEWAY_RATE_LIMIT: {config.get('GATEWAY_RATE_LIMIT', 'n/a')}.",
             f"- Load generator placement: {config.get('load_generator', 'unknown')}.",
             f"- Measurement limits: {config.get('measurement_limits', 'n/a')}.",
         ]
     )
 
-    misses = _threshold_misses(summaries, windows)
-    if misses:
-        lines.extend(["", "## Causes", "", "Threshold misses:"])
-        lines.extend(f"- {item}" for item in misses)
-        lines.append("- Stage 4 must not start until these are understood and accepted.")
+    if not invalid:
+        misses = _threshold_misses(summaries, windows)
+        if misses:
+            lines.extend(["", "## Causes", "", "Threshold misses:"])
+            lines.extend(f"- {item}" for item in misses)
+            lines.append("- Stage 4 must not start until these are understood and accepted.")
+    else:
+        lines.extend(["", "## Causes", ""])
+        lines.extend(f"- {reason}" for reason in validity_reasons)
+        lines.append("- Pack is INVALID: do not compare these cells to K1/K2 diploma goals.")
 
     lines.append("")
     return "\n".join(lines)
@@ -180,23 +319,27 @@ def _duration_percentile_ms(summary: Mapping[str, Any], key: str) -> float:
     raise ReportError(msg)
 
 
-def _k2(windows: Mapping[str, Any], target: str) -> float:
+def _k2_value(windows: Mapping[str, Any], target: str) -> tuple[float, bool]:
+    """Return ``(seconds, at_inf)`` for the target's in-window K2, or raise."""
     window = windows.get(target)
     if not isinstance(window, Mapping):
         msg = f"prometheus windows missing target {target}"
         raise ReportError(msg)
     if target == "baseline":
         key = "baseline_event_to_store_p95_seconds"
+        inf_key = "baseline_event_to_store_p95_at_inf"
     else:
         key = "features_event_to_online_p95_seconds"
+        inf_key = "features_event_to_online_p95_at_inf"
     if key not in window:
         msg = f"prometheus window {target} missing {key}"
         raise ReportError(msg)
     raw = window[key]
     if raw is None:
-        msg = f"prometheus window {target} has null {key} (no histogram samples in range)"
+        msg = f"prometheus window {target} has null {key} (no in-window K2 samples; INVALID)"
         raise ReportError(msg)
-    return float(raw)
+    at_inf = bool(window.get(inf_key, False))
+    return float(raw), at_inf
 
 
 def _threshold_misses(
@@ -212,20 +355,36 @@ def _threshold_misses(
         if p50 > _K1_P50_MS:
             misses.append(f"{name} K1 p50 = {p50:.2f} ms > {_K1_P50_MS:g} ms")
         err = error_rate(summaries[name])
-        if err >= _ERR_RATE:
-            misses.append(f"{name} error rate = {err:.4%} ≥ {_ERR_RATE:.1%}")
+        if err >= _ERR_RATE_GOAL:
+            misses.append(f"{name} error rate = {err:.4%} ≥ {_ERR_RATE_GOAL:.1%}")
     for name in _TARGETS:
-        k2 = _k2(windows, name)
-        if k2 > _K2_P95_S:
-            misses.append(f"{name} K2 p95 = {k2:.3f} s > {_K2_P95_S:g} s")
+        value, at_inf = _k2_value(windows, name)
+        if at_inf or value > _K2_P95_S:
+            shown = _fmt_s(value, at_inf=at_inf)
+            misses.append(f"{name} K2 p95 = {shown} > {_K2_P95_S:g} s")
     return misses
+
+
+def _counter_count(metric: object) -> int:
+    if not isinstance(metric, Mapping):
+        return 0
+    values = metric.get("values")
+    if isinstance(values, Mapping) and "count" in values:
+        return int(float(values["count"]))
+    if "count" in metric:
+        return int(float(metric["count"]))
+    if "value" in metric:
+        return int(float(metric["value"]))
+    return 0
 
 
 def _fmt_ms(value: float) -> str:
     return f"{value:.2f} мс"
 
 
-def _fmt_s(value: float) -> str:
+def _fmt_s(value: float, *, at_inf: bool = False) -> str:
+    if at_inf or value >= K2_FINITE_CEILING_S - 1e-9:
+        return f"> {K2_FINITE_CEILING_S:g} с"
     return f"{value:.3f} с"
 
 

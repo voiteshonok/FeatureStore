@@ -2,6 +2,27 @@
 
 Measurement packs for diploma criteria K1/K2 and Redis memory (R4).
 
+**Do not use** [`results/20261117-k1-k2/`](results/20261117-k1-k2/) for diploma
+numbers: that pack is marked `validity: INVALID` (pipeline failure under read
+load). Pre-fix HMGET ladder:
+[`results/20261117-ladder-pre-adr016/`](results/20261117-ladder-pre-adr016/).
+Post–ADR-016 smoke ladder: [`results/20261118-ladder/`](results/20261118-ladder/).
+Use a later valid `exp-k1k2` pack for diploma K1/K2.
+
+## Read-path ladder (`make exp-ladder`)
+
+Direct `:8001` only, **no backfill / simulator**, steps **20 / 50 / 100 / 200 RPS ×
+2 min**. Samples Redis `instantaneous_ops_per_sec`, `cmdstat_hmget`, docker CPU,
+and consumer lag every ~5 s. Writes `experiments/results/<UTC-date>-ladder/` with
+`ladder.md` (marks the knee). Use this before blaming gateway 429 or changing
+ADR-002 merchant buckets.
+
+```bash
+make exp-ladder
+# or reuse a running stand:
+SKIP_SETUP=1 make exp-ladder
+```
+
 ## K1 / K2 + Redis (`make exp-k1k2`)
 
 One command resets the stand (clean volumes), warms feature windows, samples

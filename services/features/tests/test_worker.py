@@ -12,7 +12,13 @@ from support import BASE, make_event
 
 from features.metrics import WorkerMetrics, worker_metrics
 from features.settings import Settings
-from features.windows import merchant_key, minute_bucket, stream_specs, to_epoch_ms, watermark_key
+from features.windows import (
+    merchant_features_key,
+    minute_bucket,
+    stream_specs,
+    to_epoch_ms,
+    watermark_key,
+)
 from features.worker import JsonFormatter, OnlineWriter, apply_event, load_script
 from schemas import FeatureSnapshot
 
@@ -251,7 +257,8 @@ async def test_redis_outage_retries_then_applies_once() -> None:
 
     await writer.handle(Record(make_event().to_bytes()))  # type: ignore[arg-type]
 
-    assert redis.calls == 2
+    # fail + successful apply + merchant_read.lua during snapshot publish
+    assert redis.calls == 3
     assert len(consumer.commits) == 1
     assert writer.counters.applied == 1
     assert writer.counters.dup == 0
@@ -283,8 +290,9 @@ async def test_equal_watermark_republishes_without_changing_buckets() -> None:
 
     await writer.handle(Record(event.to_bytes(), offset=7))  # type: ignore[arg-type]
 
-    bucket = merchant_key(event.merchant_id, minute_bucket(NOW))
-    assert await redis.hget(bucket, "count") == "1"
+    feat = merchant_features_key(event.merchant_id)
+    minute = minute_bucket(NOW)
+    assert await redis.hget(feat, f"m:{minute}:c") == "1"
     assert writer.counters.dup == 1
     assert len(producer.sent) == 2
     assert len(consumer.commits) == 1
@@ -301,8 +309,9 @@ async def test_older_offset_is_committed_without_republish() -> None:
 
     await writer.handle(Record(make_event().to_bytes(), offset=3))  # type: ignore[arg-type]
 
-    bucket = merchant_key(event.merchant_id, minute_bucket(NOW))
-    assert await redis.hget(bucket, "count") == "1"
+    feat = merchant_features_key(event.merchant_id)
+    minute = minute_bucket(NOW)
+    assert await redis.hget(feat, f"m:{minute}:c") == "1"
     assert producer.sent == []
     assert writer.counters.dup == 1
     from aiokafka.structs import TopicPartition

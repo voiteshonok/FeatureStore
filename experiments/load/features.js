@@ -1,5 +1,6 @@
 import http from "k6/http";
 import { check, fail } from "k6";
+import { Counter } from "k6/metrics";
 import { SharedArray } from "k6/data";
 
 const CATALOG = [
@@ -19,6 +20,13 @@ const TARGETS = {
   gateway: { port: 8080, auth: true },
   baseline: { port: 8003, auth: false },
 };
+
+const err2xxCheckFail = new Counter("err_2xx_check_fail");
+const err4xx = new Counter("err_4xx");
+const err429 = new Counter("err_429");
+const err503 = new Counter("err_503");
+const errTimeout = new Counter("err_timeout");
+const errOther = new Counter("err_other");
 
 const smoke = __ENV.SMOKE === "1";
 const targetName = __ENV.TARGET || "";
@@ -85,6 +93,32 @@ function pickUnknown() {
   };
 }
 
+function classifyError(res, checksOk) {
+  if (res.status === 0 || res.error_code === 1050 || (res.error && /timeout/i.test(res.error))) {
+    errTimeout.add(1);
+    return;
+  }
+  if (res.status === 429) {
+    err429.add(1);
+    return;
+  }
+  if (res.status === 503) {
+    err503.add(1);
+    return;
+  }
+  if (res.status >= 400 && res.status < 500) {
+    err4xx.add(1);
+    return;
+  }
+  if (res.status >= 200 && res.status < 300 && !checksOk) {
+    err2xxCheckFail.add(1);
+    return;
+  }
+  if (res.status < 200 || res.status >= 300) {
+    errOther.add(1);
+  }
+}
+
 export default function () {
   const row = Math.random() < 0.95 ? pickKnown() : pickUnknown();
   const headers = { "Content-Type": "application/json" };
@@ -99,7 +133,7 @@ export default function () {
     lon: row.lon,
   });
   const res = http.post(url, body, { headers });
-  check(res, {
+  const checksOk = check(res, {
     "status is 200": (r) => r.status === 200,
     "catalog features present": (r) => {
       if (r.status !== 200) {
@@ -124,4 +158,7 @@ export default function () {
       return true;
     },
   });
+  if (!checksOk || res.status !== 200) {
+    classifyError(res, checksOk);
+  }
 }

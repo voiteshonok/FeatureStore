@@ -4,7 +4,7 @@ PROFILES := --profile baseline --profile obs --profile sim
 KAFKA_BOOTSTRAP := localhost:9092
 KAFKA_TOPICS := /opt/kafka/bin/kafka-topics.sh
 
-.PHONY: up down logs ps topics secret lint typecheck test test-int test-e2e clean openapi pan-scan obs-up baseline-up backfill exp-k1k2 exp-k1k2-short
+.PHONY: up down logs ps topics secret lint typecheck test test-int test-e2e clean openapi pan-scan obs-up baseline-up backfill exp-k1k2 exp-k1k2-short exp-ladder
 
 up:
 	$(COMPOSE) up -d --wait kafka postgres redis clickhouse
@@ -37,6 +37,11 @@ exp-k1k2:
 exp-k1k2-short:
 	PATH="$(HOME)/.local/bin:$(PATH)" MODE=short PYTHONPATH=experiments/k1_k2 \
 		uv run python experiments/k1_k2/run.py
+
+# Direct-only read ladder 20/50/100/200 × 2m → experiments/results/<date>-ladder/
+exp-ladder:
+	PATH="$(HOME)/.local/bin:$(PATH)" PYTHONPATH=experiments/k1_k2 \
+		uv run python experiments/k1_k2/ladder.py
 
 down:
 	$(COMPOSE) $(PROFILES) down

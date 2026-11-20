@@ -23,8 +23,22 @@ API_LATENCY_BUCKETS_S = (
     0.25,
 )
 
-# 2 s is the K2 bound (ADR-014).
-FRESHNESS_BUCKETS_S = (0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0)
+# 2 s is the K2 bound (ADR-014). Finite ceiling 300 s; beyond that is +Inf.
+FRESHNESS_BUCKETS_S = (
+    0.01,
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    1.0,
+    2.0,
+    5.0,
+    10.0,
+    30.0,
+    60.0,
+    120.0,
+    300.0,
+)
 
 _started_ports: set[int] = set()
 

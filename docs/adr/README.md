@@ -19,3 +19,4 @@ new ADR that supersedes the old one.
 | [013](013-freshness-semantics.md) | Freshness semantics | Accepted | 2026-11-15 |
 | [014](014-observability-metrics.md) | Observability: metrics | Accepted | 2026-11-16 |
 | [015](015-sql-baseline.md) | SQL baseline | Accepted | 2026-11-16 |
+| [016](016-merchant-two-level-buckets.md) | Two-level merchant buckets | Accepted | 2026-11-18 |

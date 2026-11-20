@@ -16,9 +16,14 @@ from typing import Any
 
 import yaml
 
-from prometheus import PrometheusError, wait_for_zero_lag, window_metrics
+from prometheus import (
+    PrometheusError,
+    current_lag,
+    wait_for_zero_lag,
+    window_metrics,
+)
 from redis_memory import capture_redis_memory
-from report import ReportError, build_report
+from report import ReportError, assess_validity, build_report, error_classes
 
 _ROOT = Path(__file__).resolve().parents[2]
 _COMPOSE = ["docker", "compose", "-f", str(_ROOT / "infra" / "docker-compose.yml")]
@@ -62,6 +67,7 @@ def main(argv: list[str] | None = None) -> int:
     achieved: float | None = None
     if skip_setup:
         print("== SKIP_SETUP=1: reuse running stand ==", flush=True)
+        _ensure_gateway_rate_limit(env, gateway_limit)
     else:
         print("== clean volumes + secret + stand ==", flush=True)
         _run(["make", "clean"], cwd=_ROOT, env=env, check=False)
@@ -218,11 +224,16 @@ def main(argv: list[str] | None = None) -> int:
                 "features_event_to_online_p95_seconds": metrics[
                     "features_event_to_online_p95_seconds"
                 ],
+                "features_event_to_online_p95_at_inf": metrics[
+                    "features_event_to_online_p95_at_inf"
+                ],
                 "baseline_event_to_store_p95_seconds": metrics[
                     "baseline_event_to_store_p95_seconds"
                 ],
+                "baseline_event_to_store_p95_at_inf": metrics["baseline_event_to_store_p95_at_inf"],
                 "status_counts": metrics["status_counts"],
                 "status_shares": metrics["status_shares"],
+                "error_classes": error_classes(summary),
             }
             windows[target] = window
             run_windows.append(window)
@@ -236,14 +247,21 @@ def main(argv: list[str] | None = None) -> int:
     status_shares = (
         {name: count / total_status for name, count in status_accum.items()} if total_status else {}
     )
+    feat_lag, base_lag = current_lag(prom_url)
+    lag_payload = {"features": feat_lag, "baseline": base_lag}
     prom_payload = {
         "windows": windows,
         "status_shares": status_shares,
         "status_counts": status_accum,
         "runs": run_windows,
+        "lag": lag_payload,
     }
     _write_json(out_dir / "prometheus.json", prom_payload)
 
+    validity, validity_reasons = assess_validity(
+        k6_by_target={name: summary for name, summary in k6_summaries.items() if summary},
+        prometheus=prom_payload,
+    )
     config = {
         "git_sha": _git_sha(),
         "mode": mode,
@@ -274,6 +292,9 @@ def main(argv: list[str] | None = None) -> int:
         ),
         "simulator_duration": sim_duration,
         "prom_url": prom_url,
+        "lag": lag_payload,
+        "validity": validity,
+        "validity_reasons": validity_reasons,
         "created_at": datetime.now(UTC).isoformat(),
     }
     _write_json(out_dir / "config.json", config)
@@ -290,8 +311,47 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     (out_dir / "report.md").write_text(report, encoding="utf-8")
     print(report)
-    print(f"wrote {out_dir}", flush=True)
+    print(f"wrote {out_dir} validity={validity}", flush=True)
     return 0
+
+
+def _ensure_gateway_rate_limit(env: Mapping[str, str], gateway_limit: str) -> None:
+    """Recreate gateway when the live rate limit differs from the experiment."""
+    current = _gateway_env_rate_limit()
+    if current == gateway_limit:
+        print(f"gateway rate limit already {gateway_limit}", flush=True)
+        return
+    print(
+        f"== recreate gateway GATEWAY_RATE_LIMIT {current!r} → {gateway_limit!r} ==",
+        flush=True,
+    )
+    _run(
+        [*_COMPOSE, "up", "-d", "--force-recreate", "--wait", "gateway"],
+        cwd=_ROOT,
+        env=env,
+    )
+
+
+def _gateway_env_rate_limit() -> str | None:
+    completed = subprocess.run(  # noqa: S603
+        [
+            "docker",
+            "inspect",
+            "-f",
+            "{{range .Config.Env}}{{println .}}{{end}}",
+            "infra-gateway-1",
+        ],
+        cwd=_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        return None
+    for line in completed.stdout.splitlines():
+        if line.startswith("GATEWAY_RATE_LIMIT="):
+            return line.split("=", 1)[1]
+    return None
 
 
 def _sim_duration(k6_duration: str, pause_s: int, *, short: bool) -> str:

@@ -168,5 +168,7 @@
   "prom_url": "http://127.0.0.1:9090",
   "seed": 42,
   "simulator_duration": "260s",
+  "validity": "INVALID",
+  "validity_note": "Pipeline failure only; do not use for K1/K2 diploma claims. See report.md.",
   "warm_run_id": "warm"
 }

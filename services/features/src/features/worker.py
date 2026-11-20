@@ -27,9 +27,8 @@ from features.windows import (
     format_geo,
     geo_key,
     member,
-    merchant_key,
+    merchant_features_key,
     merchant_stream_features,
-    minute_bucket,
     read_offset,
     to_epoch_ms,
     watermark_key,
@@ -140,7 +139,7 @@ async def apply_event(
         has_geo = False
     keys = [
         card_key(event.card_token),
-        merchant_key(event.merchant_id, minute_bucket(event_time_ms)),
+        merchant_features_key(event.merchant_id),
         watermark_key(partition),
         geo_key(event.card_token),
     ]

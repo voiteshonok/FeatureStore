@@ -2,20 +2,30 @@
   "windows": {
     "direct": {
       "features_event_to_online_p95_seconds": 0.12,
-      "baseline_event_to_store_p95_seconds": 0.4
+      "features_event_to_online_p95_at_inf": false,
+      "baseline_event_to_store_p95_seconds": 0.4,
+      "baseline_event_to_store_p95_at_inf": false
     },
     "gateway": {
       "features_event_to_online_p95_seconds": 0.15,
-      "baseline_event_to_store_p95_seconds": 0.4
+      "features_event_to_online_p95_at_inf": false,
+      "baseline_event_to_store_p95_seconds": 0.4,
+      "baseline_event_to_store_p95_at_inf": false
     },
     "baseline": {
       "features_event_to_online_p95_seconds": 0.12,
-      "baseline_event_to_store_p95_seconds": 0.45
+      "features_event_to_online_p95_at_inf": false,
+      "baseline_event_to_store_p95_seconds": 0.45,
+      "baseline_event_to_store_p95_at_inf": false
     }
   },
   "status_shares": {
     "fresh": 0.8,
     "stale": 0.05,
     "default": 0.15
+  },
+  "lag": {
+    "features": 0,
+    "baseline": 0
   }
 }

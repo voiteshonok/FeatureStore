@@ -205,6 +205,7 @@ services:
       DATABASE_URL: postgresql://svc_features:${SVC_FEATURES_PASSWORD:-svc_features_dev}@postgres:5432/${POSTGRES_DB:-featurestore}
       N_PARTITIONS: "4"
       METRICS_PORT: "9000"
+      FEATURES_API_WORKERS: ${FEATURES_API_WORKERS:-4}  # 8 did not improve 200 RPS p99
     depends_on:
       kafka:
         condition: service_healthy
@@ -227,7 +228,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512m
+          memory: 1g
 
   detection:
     build:

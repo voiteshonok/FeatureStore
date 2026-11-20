@@ -25,7 +25,10 @@ thousands.
 - **Merchants — minute buckets.** One hash per merchant with fields per minute:
   count, sum, declined. A 24 h window is the sum of the last 1,440 buckets, so the
   window boundary has one-minute granularity. ClickHouse uses the same bucket
-  definition for parity.
+  definition for parity. **Amended by [ADR-016](016-merchant-two-level-buckets.md):**
+  hourly roll-ups are dual-written and used on read so a 24 h fetch is
+  ~23 hourly + ≤120 minute hashes instead of 1,440 minute `HMGET`s; window
+  bounds are unchanged.
 
 ## Alternatives considered
 

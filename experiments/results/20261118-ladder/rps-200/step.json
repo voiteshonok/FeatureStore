@@ -1,0 +1,29 @@
+{
+  "duration": "30s",
+  "ended_unix": 1794963227.9116793,
+  "error_classes": {
+    "2xx_check_fail": 0,
+    "429": 0,
+    "4xx": 0,
+    "503": 25,
+    "other": 0,
+    "timeout": 0
+  },
+  "error_rate": 0.004165972337943676,
+  "k6_exit_code": 0,
+  "p50_ms": 8.651697,
+  "p99_ms": 942.172471,
+  "rate": 200,
+  "samples": {
+    "features_api_cpu_pct_avg": 122.97,
+    "features_api_cpu_pct_max": 167.67,
+    "features_consumer_lag_max": 0.0,
+    "hmget_calls_per_sec": 0.0,
+    "n_samples": 4,
+    "redis_cpu_pct_avg": 26.9525,
+    "redis_cpu_pct_max": 33.1,
+    "redis_ops_per_sec_avg": 25992.0,
+    "redis_ops_per_sec_max": 34715
+  },
+  "started_unix": 1794963197.307338
+}

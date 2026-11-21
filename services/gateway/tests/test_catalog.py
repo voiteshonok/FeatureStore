@@ -1,7 +1,7 @@
 """Registry SELECT and catalog failures."""
 
 import httpx
-from harness import mount, send
+from harness import mount, operator_headers, send
 
 
 class _Cursor:
@@ -51,7 +51,13 @@ async def test_catalog_returns_the_registry_rows() -> None:
     cursor = _Cursor([_ROW, _ON_DEMAND])
     gateway = await mount(_handler, pool=_Pool(cursor))
     try:
-        response = await send(gateway.app, "GET", "/v1/catalog")
+        response = await send(
+            gateway.app,
+            "GET",
+            "/v1/catalog",
+            api_key=None,
+            headers=operator_headers(),
+        )
     finally:
         await gateway.aclose()
     assert response.status_code == 200
@@ -86,7 +92,13 @@ async def test_catalog_returns_the_registry_rows() -> None:
 async def test_catalog_failure_is_503() -> None:
     gateway = await mount(_handler, pool=_Pool(_Cursor([], fail=True)))
     try:
-        response = await send(gateway.app, "GET", "/v1/catalog")
+        response = await send(
+            gateway.app,
+            "GET",
+            "/v1/catalog",
+            api_key=None,
+            headers=operator_headers(),
+        )
     finally:
         await gateway.aclose()
     assert response.status_code == 503

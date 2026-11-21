@@ -309,12 +309,16 @@ services:
     ports:
       - "8080:8080"
     environment:
-      GATEWAY_API_KEYS: ${GATEWAY_API_KEYS:-scoring:dev-scoring-key,dashboard:dev-dashboard-key}
+      GATEWAY_API_KEYS: ${GATEWAY_API_KEYS:-scoring:dev-scoring-key}
       GATEWAY_RATE_LIMIT: ${GATEWAY_RATE_LIMIT:-100/second}
+      GATEWAY_COOKIE_SECURE: ${GATEWAY_COOKIE_SECURE:-false}
+      JWT_SECRET_FILE: /run/secrets/jwt_secret
       FEATURES_URL: http://features-api:8001
       DETECTION_URL: http://detection:8002
       DATABASE_URL: postgresql://svc_gateway:${SVC_GATEWAY_PASSWORD:-svc_gateway_dev}@postgres:5432/${POSTGRES_DB:-featurestore}
       METRICS_PORT: "9000"
+    secrets:
+      - jwt_secret
     depends_on:
       postgres:
         condition: service_healthy
@@ -453,6 +457,8 @@ services:
 secrets:
   hmac_key:
     file: ../secrets/hmac_key
+  jwt_secret:
+    file: ../secrets/jwt_secret
 
 volumes:
   kafka-data:

@@ -28,8 +28,9 @@ Accepted on 2026-11-15: a thin custom FastAPI gateway.
 The gateway is the entry point for read and control traffic. It checks API keys, limits
 each client to 100 requests per second, and proxies to the feature API and the detection
 API. It does not compute features. TLS termination stays outside the process
-(compose-internal HTTP). JWT and OIDC are outside the diploma scope; callers present
-API keys.
+(compose-internal HTTP). Operator JWT-in-cookie auth is defined in ADR-020 (superseding
+the earlier “JWT outside diploma scope” line); OIDC remains out of scope. Machine
+callers present API keys.
 
 Ingestion keeps published port 8000. The gateway does not route `POST /v1/events`, so
 write-path backpressure and delivery stay at ingestion.

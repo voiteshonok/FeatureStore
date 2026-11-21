@@ -15,6 +15,7 @@ Sort = Literal["created_at", "-created_at"]
 Probe = Literal["ok", "down"]
 Entity = Literal["card", "merchant"]
 Comparison = Literal["gt", "ge", "lt", "le"]
+OperatorRole = Literal["viewer", "analyst", "admin"]
 
 
 class FieldErrorOut(BaseModel):
@@ -50,6 +51,25 @@ class ReadyBody(BaseModel):
     status: Literal["ready", "not_ready"]
     features: Probe
     detection: Probe
+
+
+class LoginBody(BaseModel):
+    """Body of ``POST /v1/auth/login``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=1, max_length=128)
+
+
+class MeOut(BaseModel):
+    """Body of ``GET /v1/auth/me``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    operator_id: str
+    email: str
+    role: OperatorRole
 
 
 class CatalogEntry(BaseModel):

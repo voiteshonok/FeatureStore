@@ -100,5 +100,5 @@ startup upsert keeps them consistent and versions accumulate as history.
 | Limitation | Impact | Plan |
 | --- | --- | --- |
 | Init scripts instead of a migration tool | None pre-release; history = Git | Numbered `NN-*.sql` (or Alembic) at first post-release change |
-| Alert actor columns are text, not FKs to operators | Operator auth is out of MVP scope; API takes operator id from the request | FK once dashboard login lands |
+| Alert actor columns are text, not FKs to operators | Actors are gateway session ids (ADR-020), not mandatory FKs in MVP | FK once operators are stable across environments |
 | Registry briefly trails the code catalog at deploy | Read model only | Startup upsert is idempotent; stores stay authoritative |

@@ -66,7 +66,7 @@ Service boundaries, contracts and the full deployment diagram: see
 Requirements: Docker + Docker Compose, `uv`, Python 3.12.
 
 ```bash
-make secret        # generate the local HMAC key (never committed)
+make secret        # generate local HMAC and JWT secrets (never committed)
 make up            # kafka, postgres, redis, clickhouse, topics, ingestion
 make ps            # check health
 make baseline-up   # SQL measurement stand on :8003 (ADR-015); not a service, not started by make up

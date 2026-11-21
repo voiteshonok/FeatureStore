@@ -29,6 +29,7 @@ ON CONFLICT (merchant_id) DO NOTHING;
 -- demo credentials are for the local environment.
 INSERT INTO ops.operators (email, password_hash, role)
 VALUES
+    ('viewer@featurestore.local',  crypt('demo-viewer-pass',  gen_salt('bf')), 'viewer'),
     ('analyst@featurestore.local', crypt('demo-analyst-pass', gen_salt('bf')), 'analyst'),
     ('admin@featurestore.local',   crypt('demo-admin-pass',   gen_salt('bf')), 'admin')
 ON CONFLICT (email) DO NOTHING;

@@ -2,6 +2,18 @@
 
 Breaking and notable contract changes for the public `/v1/` surface (gateway).
 
+## 2026-11-21 — Operator login (T7.3 / ADR-020)
+
+**Breaking** for clients that used the `dashboard` API key.
+
+- `POST /v1/auth/login` `{email, password}` → 204 + httpOnly cookie `fs_session`.
+- `POST /v1/auth/logout` → 204, cookie cleared.
+- `GET /v1/auth/me` → `{operator_id, email, role}` (401 without session).
+- Dual auth: API key (scoring) or session cookie (operators). The `dashboard` key
+  is removed from defaults. Cookie-authenticated mutating requests require
+  `X-Requested-With: fetch`. Gateway sets `X-Operator-Id` / `X-Operator-Role` on
+  upstream calls and strips any client-supplied copies.
+
 ## 2026-11-21 — Unified Problem Details errors (T7.2)
 
 **Breaking** for clients that parsed `{"detail": ...}`.
@@ -25,7 +37,7 @@ Also added:
 - `GET /v1/alerts/{alert_id}` — alert, rule name/conditions, audit history.
 - `GET /v1/rules` — rules with conditions.
 - `PATCH /v1/alerts/{alert_id}` body is `{ "status", "note"? }`; operator comes
-  from `X-Operator-Id` / `X-Operator-Role` (set by the gateway after T7.3).
+  from `X-Operator-Id` / `X-Operator-Role` (set by the gateway; ADR-020).
   `note` is required when resolving (3–500 characters).
 
 Version path stays `/v1/` — no external clients yet.

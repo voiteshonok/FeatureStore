@@ -11,11 +11,13 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from gateway.api import create_app
+from gateway.auth.jwt import issue_token
 from gateway.metrics import GatewayMetrics
 from gateway.settings import Settings
 
 KEY = "dev-scoring-key"
-DASHBOARD_KEY = "dev-dashboard-key"
+OTHER_KEY = "dev-other-key"
+TEST_JWT_SECRET = bytes.fromhex("ab" * 32)
 Handler = Callable[[httpx.Request], httpx.Response | Awaitable[httpx.Response]]
 
 
@@ -23,15 +25,34 @@ def make_settings(
     *,
     api_keys: dict[str, str] | None = None,
     rate_limit: str = "100/second",
+    jwt_secret: bytes = TEST_JWT_SECRET,
+    cookie_secure: bool = False,
 ) -> Settings:
     return Settings(
-        api_keys={KEY: "scoring", DASHBOARD_KEY: "dashboard"} if api_keys is None else api_keys,
+        api_keys={KEY: "scoring", OTHER_KEY: "batch"} if api_keys is None else api_keys,
         rate_limit=rate_limit,
         features_url="http://features.test",
         detection_url="http://detection.test",
         database_url="postgresql://svc_gateway:featurestore@localhost/featurestore",
         metrics_port=0,
+        jwt_secret=jwt_secret,
+        cookie_secure=cookie_secure,
     )
+
+
+def operator_headers(
+    *,
+    operator_id: str = "1",
+    role: str = "analyst",
+    secret: bytes = TEST_JWT_SECRET,
+    csrf: bool = False,
+) -> dict[str, str]:
+    """Cookie session headers. Set ``csrf=True`` for mutating requests."""
+    token = issue_token(operator_id=operator_id, role=role, secret=secret)
+    headers = {"Cookie": f"fs_session={token}"}
+    if csrf:
+        headers["X-Requested-With"] = "fetch"
+    return headers
 
 
 class Gateway:

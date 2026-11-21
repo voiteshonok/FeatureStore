@@ -8,7 +8,7 @@ from uuid import UUID
 
 import httpx
 import pytest
-from harness import make_settings, mount, ok_json, send
+from harness import make_settings, mount, ok_json, operator_headers, send
 from prometheus_client import CollectorRegistry
 
 from gateway.api import export_openapi
@@ -101,7 +101,7 @@ async def test_missing_key_is_401_and_unknown_key_is_403() -> None:
 
     assert missing.status_code == 401
     assert missing.json()["type"] == "unauthorized"
-    assert missing.json()["title"] == "missing api key"
+    assert missing.json()["title"] == "missing credentials"
     assert "request_id" in missing.json()
     assert unknown.status_code == 403
     assert unknown.json()["type"] == "forbidden"
@@ -130,7 +130,9 @@ async def test_alert_route_label_is_the_template() -> None:
             gateway.app,
             "PATCH",
             f"/v1/alerts/{alert_id}",
+            api_key=None,
             content=b"{}",
+            headers=operator_headers(csrf=True),
         )
     finally:
         await gateway.aclose()
@@ -179,17 +181,19 @@ async def test_rejected_auth_does_not_consume_the_rate_limit() -> None:
 
 
 async def test_rate_limit_is_shared_across_routes_and_per_client() -> None:
+    from harness import OTHER_KEY
+
     gateway = await mount(ok_json(), make_settings(rate_limit="2/minute"))
     try:
-        features = await send(gateway.app, "POST", "/v1/features")
-        alerts = await send(gateway.app, "GET", "/v1/alerts")
+        first = await send(gateway.app, "POST", "/v1/features")
+        second = await send(gateway.app, "POST", "/v1/features")
         blocked = await send(gateway.app, "POST", "/v1/features")
-        other = await send(gateway.app, "POST", "/v1/features", api_key="dev-dashboard-key")
+        other = await send(gateway.app, "POST", "/v1/features", api_key=OTHER_KEY)
     finally:
         await gateway.aclose()
 
-    assert features.status_code == 200
-    assert alerts.status_code == 200
+    assert first.status_code == 200
+    assert second.status_code == 200
     assert blocked.status_code == 429
     assert blocked.json()["type"] == "rate_limited"
     assert blocked.json()["title"] == "rate limit exceeded"
@@ -272,11 +276,13 @@ def test_openapi_documents_the_business_routes(tmp_path: Path) -> None:
     document = json.loads(destination.read_text(encoding="utf-8"))
     assert "/v1/events" not in document["paths"]
     post = document["paths"]["/v1/features"]["post"]
-    assert post["security"] == [{"ApiKey": []}]
+    assert post["security"] == [{"ApiKey": []}, {"SessionCookie": []}]
     assert document["components"]["securitySchemes"]["ApiKey"]["name"] == "X-API-Key"
+    assert document["components"]["securitySchemes"]["SessionCookie"]["name"] == "fs_session"
     assert "FeatureRequest" in document["components"]["schemas"]
     assert "AlertOut" in document["components"]["schemas"]
     assert "CatalogEntry" in document["components"]["schemas"]
+    assert "MeOut" in document["components"]["schemas"]
     assert "/v1/alerts" in document["paths"]
     assert "/v1/alerts/{alert_id}" in document["paths"]
     assert "get" in document["paths"]["/v1/alerts/{alert_id}"]
@@ -284,6 +290,9 @@ def test_openapi_documents_the_business_routes(tmp_path: Path) -> None:
     assert "AlertListOut" in document["components"]["schemas"]
     assert "ProblemDetails" in document["components"]["schemas"]
     assert "/v1/catalog" in document["paths"]
+    assert "/v1/auth/login" in document["paths"]
+    assert "/v1/auth/logout" in document["paths"]
+    assert "/v1/auth/me" in document["paths"]
     assert "/health" in document["paths"]
     assert "security" not in document["paths"]["/health"]["get"]
     assert "security" not in document["paths"]["/ready"]["get"]

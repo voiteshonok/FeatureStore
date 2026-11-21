@@ -20,15 +20,17 @@ from features.metrics import WORKER_METRICS, WorkerMetrics, start_metrics_server
 from features.settings import Settings
 from features.windows import (
     DAY_MS,
-    MERCHANT_TTL_S,
     _await,
     card_key,
     card_stream_features,
     format_geo,
     geo_key,
+    hour_expiry_ms,
+    key_expiry_ms,
     member,
     merchant_features_key,
     merchant_stream_features,
+    minute_expiry_ms,
     read_offset,
     to_epoch_ms,
     watermark_key,
@@ -37,9 +39,18 @@ from schemas import FeatureSnapshot, TransactionEvent
 from schemas.catalog import Entity
 
 _SCRIPT = importlib.resources.files("features").joinpath("apply.lua").read_text(encoding="utf-8")
-_LOG_FIELDS = ("event_id", "partition", "offset", "outcome", "applied", "dup", "skipped")
+_LOG_FIELDS = (
+    "event_id",
+    "partition",
+    "offset",
+    "outcome",
+    "applied",
+    "dup",
+    "dup_event",
+    "skipped",
+)
 Sleep = Callable[[float], Awaitable[None]]
-Outcome = Literal["applied", "dup"]
+Outcome = Literal["applied", "dup", "dup_event"]
 
 
 class JsonFormatter(logging.Formatter):
@@ -127,7 +138,11 @@ async def apply_event(
     offset: int,
     now_ms: int,
 ) -> Outcome:
-    """Apply one event. ``dup`` means the partition watermark already covers it."""
+    """Apply one event.
+
+    ``dup`` — partition watermark already covers the offset.
+    ``dup_event`` — same ``event_id|amount`` already in the card window (ADR-017).
+    """
     event_time_ms = to_epoch_ms(event.event_time)
     lat = event.lat
     lon = event.lon
@@ -151,7 +166,9 @@ async def apply_event(
         str(DAY_MS),
         str(event.amount_minor),
         "1" if event.status == "declined" else "0",
-        str(MERCHANT_TTL_S),
+        str(minute_expiry_ms(event_time_ms)),
+        str(hour_expiry_ms(event_time_ms)),
+        str(key_expiry_ms(event_time_ms)),
         str(to_epoch_ms(event.ingest_time)),
         "1" if has_geo else "0",
         geo,
@@ -162,6 +179,8 @@ async def apply_event(
         return "applied"
     if result == "dup":
         return "dup"
+    if result == "dup_event":
+        return "dup_event"
     msg = f"unexpected apply result {result!r}"
     raise RuntimeError(msg)
 
@@ -225,6 +244,7 @@ async def publish_snapshots(
 class Counters:
     applied: int = 0
     dup: int = 0
+    dup_event: int = 0
     skipped: int = 0
 
 
@@ -427,6 +447,8 @@ class OnlineWriter:
     async def _should_publish(self, outcome: Outcome, partition: int, offset: int) -> bool:
         if outcome == "applied":
             return True
+        if outcome == "dup_event":
+            return False
         return await read_offset(self.redis, partition) == offset
 
     async def _reload_script(self, exc: Exception) -> Exception | None:
@@ -488,6 +510,8 @@ class OnlineWriter:
         self.metrics.events.labels(outcome=outcome).inc()
         if outcome == "applied":
             self.counters.applied += 1
+        elif outcome == "dup_event":
+            self.counters.dup_event += 1
         else:
             self.counters.dup += 1
 

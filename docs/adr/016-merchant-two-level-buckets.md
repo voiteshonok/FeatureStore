@@ -24,7 +24,7 @@ parity: the merchant 24 h window remains the buckets
   partial hours at the window edges.
 - **Add hourly roll-ups** (`mhbk:{merchant}:{hour}`, `hour = minute // 60`)
   updated atomically in the same Lua apply as the minute hash (count / sum /
-  declined, same TTL policy).
+  declined, same TTL policy). **TTL policy superseded by ADR-017.**
 - **Read path:** sum complete hours that lie entirely inside the 24 h minute
   window via hourly keys, and sum only the incomplete left/right edge minutes
   via minute keys (~23 hourly + ≤120 minute reads instead of 1,440).

@@ -5,7 +5,8 @@ from uuid import UUID, uuid4
 
 from schemas import TransactionEvent
 
-BASE = datetime(2026, 6, 1, 12, 0, tzinfo=UTC)
+# Near wall clock so apply.lua absolute PEXPIREAT / HPEXPIREAT (ADR-017) stay in the future.
+BASE = datetime.now(UTC).replace(microsecond=0)
 
 
 def make_event(**overrides: object) -> TransactionEvent:

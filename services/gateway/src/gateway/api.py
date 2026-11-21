@@ -10,6 +10,7 @@ import logging
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal, cast
 from uuid import UUID, uuid4
@@ -56,7 +57,7 @@ from gateway.models import (
     Sort,
     Status,
 )
-from gateway.proxy import forward, new_client
+from gateway.proxy import forward, forward_stream, new_client
 from gateway.settings import Settings
 from schemas import FeatureRequest, FeatureResponse
 
@@ -562,6 +563,23 @@ def _install_routes(app: FastAPI, limiter: Limiter, rate: str) -> None:
     @limited
     async def get_catalog(request: Request) -> Response:
         return await _catalog(request)
+
+    @app.get("/v1/stream/alerts")
+    @limited
+    async def stream_alerts(request: Request) -> Response:
+        settings: Settings = request.app.state.settings
+        close_after_s: float | None = None
+        claims = getattr(request.state, "session_claims", None)
+        if claims is not None and getattr(claims, "exp", None) is not None:
+            remaining = (claims.exp - datetime.now(UTC)).total_seconds()
+            close_after_s = max(0.0, remaining)
+        return await forward_stream(
+            request.app.state.client,
+            request,
+            base_url=settings.detection_url,
+            service="detection",
+            close_after_s=close_after_s,
+        )
 
 
 def _contract_app() -> FastAPI:

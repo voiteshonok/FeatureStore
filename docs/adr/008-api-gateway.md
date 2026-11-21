@@ -52,7 +52,8 @@ health only (ADR-007, ADR-012), so the gateway runs one `SELECT` as `svc_gateway
 - Upstream calls use a 0.5 s connect timeout and a 2 s read timeout. GET is tried
   three times, with 0.1 s then 0.4 s between attempts. POST and PATCH are not retried.
   A connection failure or timeout becomes 503. An upstream HTTP response, including
-  4xx, is returned unchanged.
+  4xx, is returned unchanged. **Exception (ADR-021):** SSE routes use a streaming
+  proxy with no read timeout and no retries.
 - `svc_gateway` has `SELECT` on the feature registry tables and nothing else. A failed
   catalog read is 503.
 - The extra hop is on the feature read path and counts toward K1.

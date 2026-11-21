@@ -97,6 +97,14 @@ bounded retries with exponential backoff (idempotent GETs only), and a mapped
 logged in [api-changelog.md](api-changelog.md). Error bodies follow a shared
 Problem Details shape — see [api-errors.md](api-errors.md).
 
+### Live stream (SSE)
+
+`GET /v1/stream/alerts` is proxied gateway → detection without a read timeout and
+without retries (ADR-021). Alerts are pushed from Postgres `LISTEN/NOTIFY` after
+commit; stats are derived from the detection consumer's `features.updates`
+window. Session operators only (ADR-020). Event schemas live in
+`libs/schemas.stream`; see [asyncapi/alerts-stream.yaml](asyncapi/alerts-stream.yaml).
+
 ### Correlation
 
 `event_id` is the correlation id of the pipeline: assigned at ingestion, carried in

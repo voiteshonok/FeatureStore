@@ -95,6 +95,7 @@ class DetectionConsumer:
         *,
         sleep: Sleep = asyncio.sleep,
         metrics: DetectionMetrics | None = None,
+        stats: object | None = None,
     ) -> None:
         self.settings = settings
         self.pool = pool
@@ -102,6 +103,7 @@ class DetectionConsumer:
         self.consumer = consumer
         self.sleep = sleep
         self.metrics = METRICS if metrics is None else metrics
+        self.stats = stats
         self._started = False
         self._closed = False
 
@@ -113,6 +115,7 @@ class DetectionConsumer:
         cache: RuleCache,
         *,
         metrics: DetectionMetrics | None = None,
+        stats: object | None = None,
     ) -> "DetectionConsumer":
         """Build the consumer, connect to Kafka, and return it."""
         consumer = AIOKafkaConsumer(
@@ -123,7 +126,7 @@ class DetectionConsumer:
             auto_offset_reset="earliest",
             client_id="detection",
         )
-        service = cls(settings, pool, cache, consumer, metrics=metrics)
+        service = cls(settings, pool, cache, consumer, metrics=metrics, stats=stats)
         try:
             await service.start()
         except BaseException:
@@ -217,6 +220,7 @@ class DetectionConsumer:
             return
         fired = await self._apply_with_retry(snapshot)
         self.metrics.snapshots.labels(outcome="applied").inc()
+        self._record_stats(snapshot, fired)
         for alert in fired:
             self._log_fire(snapshot, alert)
         await self._commit(record, str(snapshot.event_id))
@@ -285,6 +289,18 @@ class DetectionConsumer:
             extra={"event_id": event_id},
             exc_info=_exc_info(exc) if exc is not None else None,
         )
+
+    def _record_stats(self, snapshot: FeatureSnapshot, fired: tuple[FiredAlert, ...]) -> None:
+        stats = self.stats
+        if stats is None:
+            return
+        record = getattr(stats, "record", None)
+        record_alert = getattr(stats, "record_alert", None)
+        if callable(record):
+            record(snapshot)
+        if callable(record_alert):
+            for alert in fired:
+                record_alert(alert.rule)
 
     def _log_fire(self, snapshot: FeatureSnapshot, alert: FiredAlert) -> None:
         self.metrics.alerts.labels(rule=alert.rule).inc()

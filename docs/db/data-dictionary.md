@@ -161,6 +161,10 @@ stream features only (ADR-013).
 | acknowledged_by/at, resolved_by/at | text / timestamptz | Set by the alert API together with the status |
 | resolution_note | text, CHECK length 3–500 when set | Required by the API when resolving; audit trigger copies it into `detail` (`40-alerts-ui.sql`) |
 
+After commit, an `AFTER INSERT OR UPDATE OF status` trigger calls
+`pg_notify('detection_alerts', {alert_id, op})` so the detection SSE listener can
+push without polling (ADR-021). Payload is id-only (NOTIFY 8 KB limit).
+
 **Integrity in the schema, not in code:** two partial unique indexes guarantee at
 most one *open* alert per (rule, card) and per (rule, merchant) — duplicate
 inserts under Kafka at-least-once redelivery or concurrent consumers collapse at

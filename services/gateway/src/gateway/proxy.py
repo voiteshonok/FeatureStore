@@ -8,6 +8,7 @@ unchanged.
 
 import asyncio
 import logging
+from collections.abc import AsyncIterator
 from types import TracebackType
 
 import httpx
@@ -17,6 +18,8 @@ from starlette.responses import Response
 from gateway.metrics import GatewayMetrics
 
 TIMEOUT = httpx.Timeout(connect=0.5, read=2.0, write=2.0, pool=0.5)
+# SSE (ADR-021): keep the connect bound, never time out the open stream.
+STREAM_TIMEOUT = httpx.Timeout(connect=0.5, read=None, write=2.0, pool=0.5)
 _GET_BACKOFF_S = (0.1, 0.4)
 _DROP_HEADERS = frozenset(
     {
@@ -33,6 +36,7 @@ _DROP_HEADERS = frozenset(
         "x-request-id",
     }
 )
+_STREAM_DROP_HEADERS = _DROP_HEADERS | frozenset({"content-length", "content-encoding"})
 
 
 def new_client() -> httpx.AsyncClient:
@@ -72,6 +76,9 @@ def _forward_headers(request: Request, request_id: str) -> dict[str, str]:
     content_type = request.headers.get("content-type")
     if content_type is not None:
         headers["content-type"] = content_type
+    last_event_id = request.headers.get("last-event-id")
+    if last_event_id is not None and last_event_id.strip() != "":
+        headers["Last-Event-ID"] = last_event_id.strip()
     # Operator identity comes only from a verified session (ADR-020). Never copy
     # client-supplied X-Operator-* headers.
     operator_id = getattr(request.state, "operator_id", None)
@@ -136,6 +143,94 @@ async def forward(
         type="upstream_unavailable",
         title=f"{service} unavailable",
         status=503,
+    )
+
+
+async def forward_stream(
+    client: httpx.AsyncClient,
+    request: Request,
+    *,
+    base_url: str,
+    service: str,
+    close_after_s: float | None = None,
+) -> Response:
+    """Proxy an SSE stream: no read timeout, no retries (ADR-021).
+
+    ``close_after_s`` ends the stream when the operator JWT expires so the
+    client reconnects and receives 401 if the session is gone.
+    """
+    from starlette.responses import StreamingResponse
+
+    from gateway.errors import problem_response
+
+    request_id = _request_id(request)
+    url = _target(base_url, request)
+    headers = _forward_headers(request, request_id)
+    try:
+        upstream = await client.send(
+            client.build_request("GET", url, headers=headers, timeout=STREAM_TIMEOUT),
+            stream=True,
+        )
+    except httpx.TimeoutException as exc:
+        _count_upstream_error(request, service, exc)
+        _log_failure(service, request, request_id, exc)
+        return problem_response(
+            request,
+            type="upstream_timeout",
+            title=f"{service} timeout",
+            status=504,
+        )
+    except httpx.TransportError as exc:
+        _count_upstream_error(request, service, exc)
+        _log_failure(service, request, request_id, exc)
+        return problem_response(
+            request,
+            type="upstream_unavailable",
+            title=f"{service} unavailable",
+            status=503,
+        )
+
+    if upstream.status_code >= 400:
+        body = await upstream.aread()
+        await upstream.aclose()
+        out_headers: dict[str, str] = {"X-Request-ID": request_id}
+        content_type = upstream.headers.get("content-type")
+        if content_type is not None:
+            out_headers["content-type"] = content_type
+        return Response(content=body, status_code=upstream.status_code, headers=out_headers)
+
+    response_headers: dict[str, str] = {"X-Request-ID": request_id}
+    for key, value in upstream.headers.items():
+        if key.lower() in _STREAM_DROP_HEADERS:
+            continue
+        response_headers[key] = value
+
+    async def body_iter() -> AsyncIterator[bytes]:
+        loop = asyncio.get_running_loop()
+        deadline = None if close_after_s is None else loop.time() + close_after_s
+        try:
+            try:
+                stream = upstream.aiter_bytes()
+            except httpx.StreamConsumed:
+                yield upstream.content
+                return
+            async for chunk in stream:
+                if deadline is not None and loop.time() >= deadline:
+                    break
+                if await request.is_disconnected():
+                    break
+                yield chunk
+        except httpx.StreamConsumed:
+            if upstream.content:
+                yield upstream.content
+        finally:
+            await upstream.aclose()
+
+    return StreamingResponse(
+        body_iter(),
+        status_code=upstream.status_code,
+        headers=response_headers,
+        media_type=upstream.headers.get("content-type", "text/event-stream"),
     )
 
 

@@ -27,8 +27,8 @@ _MERCHANT_READ_SHA_ATTR = "_featurestore_merchant_read_sha"
 MINUTE_MS = 60_000
 DAY_MS = 24 * 60 * MINUTE_MS
 MERCHANT_BUCKETS = 1_440
-MERCHANT_TTL_S = 25 * 60 * 60
 MINUTES_PER_HOUR = 60
+HOUR_MS = MINUTES_PER_HOUR * MINUTE_MS
 
 
 def minute_bucket(event_time_ms: int) -> int:
@@ -44,6 +44,21 @@ def minute_bucket(event_time_ms: int) -> int:
 def hour_bucket(event_time_ms: int) -> int:
     """UTC hour containing ``event_time_ms`` (``minute_bucket // 60``)."""
     return minute_bucket(event_time_ms) // MINUTES_PER_HOUR
+
+
+def minute_expiry_ms(event_time_ms: int) -> int:
+    """Absolute PEXPIREAT for minute fields: end of minute + 24 h + 1 min (ADR-017)."""
+    return (minute_bucket(event_time_ms) + 1) * MINUTE_MS + DAY_MS + MINUTE_MS
+
+
+def hour_expiry_ms(event_time_ms: int) -> int:
+    """Absolute PEXPIREAT for hour fields: end of hour + 24 h + 1 min (ADR-017)."""
+    return (hour_bucket(event_time_ms) + 1) * HOUR_MS + DAY_MS + MINUTE_MS
+
+
+def key_expiry_ms(event_time_ms: int) -> int:
+    """Absolute PEXPIREAT for ``card:`` / ``geo:`` keys (ADR-017)."""
+    return event_time_ms + DAY_MS + MINUTE_MS
 
 
 def to_epoch_ms(value: datetime) -> int:

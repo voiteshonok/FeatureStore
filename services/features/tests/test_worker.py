@@ -319,6 +319,32 @@ async def test_older_offset_is_committed_without_republish() -> None:
     assert consumer.commits == [{TopicPartition(TOPIC, 0): 4}]
 
 
+async def test_dup_event_advances_watermark_without_publish() -> None:
+    registry = CollectorRegistry()
+    redis = FakeAsyncRedis(decode_responses=True)
+    event = make_event(amount_minor=180, status="declined")
+    sha = await load_script(redis)
+    assert await apply_event(redis, sha, event, partition=0, offset=7, now_ms=NOW) == "applied"
+    producer = FakeProducer()
+    consumer = FakeConsumer()
+    writer = _writer(redis, consumer, producer, metrics=worker_metrics(registry))
+
+    await writer.handle(Record(event.to_bytes(), offset=8))  # type: ignore[arg-type]
+
+    feat = merchant_features_key(event.merchant_id)
+    minute = minute_bucket(NOW)
+    assert await redis.hget(feat, f"m:{minute}:c") == "1"
+    assert await redis.hget(feat, f"m:{minute}:d") == "1"
+    assert await redis.hget(watermark_key(0), "offset") == "8"
+    assert producer.sent == []
+    assert writer.counters.dup_event == 1
+    assert writer.counters.dup == 0
+    assert registry.get_sample_value("features_events_total", {"outcome": "dup_event"}) == 1.0
+    from aiokafka.structs import TopicPartition
+
+    assert consumer.commits == [{TopicPartition(TOPIC, 0): 9}]
+
+
 async def test_noscript_reloads_and_applies() -> None:
     inner = FakeAsyncRedis(decode_responses=True)
     redis = FlakyRedis(inner, failures=1, noscript=True)

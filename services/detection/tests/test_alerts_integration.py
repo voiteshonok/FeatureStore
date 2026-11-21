@@ -20,13 +20,14 @@ from schemas import FeatureSnapshot
 pytestmark = pytest.mark.integration
 
 _EVENT = UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+_OPERATOR = {"X-Operator-Id": "op-1", "X-Operator-Role": "analyst"}
 _ALERTS = """
 SELECT alert_id::text, card_token, feature_snapshot, status
 FROM detection.alerts
 ORDER BY created_at
 """
 _RESOLVED = """
-SELECT resolved_at IS NOT NULL, resolved_by, status
+SELECT resolved_at IS NOT NULL, resolved_by, status, resolution_note
 FROM detection.alerts
 WHERE alert_id = %s
 """
@@ -130,23 +131,24 @@ async def test_redelivery_collapses_and_resolve_writes_one_audit_row(
             opened = await client.get("/v1/alerts", params={"status": "open"})
             response = await client.patch(
                 f"/v1/alerts/{alert_id}",
-                json={"status": "resolved", "operator_id": "op-1"},
+                headers=_OPERATOR,
+                json={"status": "resolved", "note": "confirmed fraud"},
             )
             resolved = await client.get("/v1/alerts", params={"status": "resolved"})
         assert ready.status_code == 200, ready.text
         assert ready.json() == {"status": "ready", "kafka": "ok", "postgres": "ok"}
         assert opened.status_code == 200
-        assert len(opened.json()) == 1
+        assert len(opened.json()["items"]) == 1
         assert response.status_code == 200
         assert response.json()["status"] == "resolved"
         assert resolved.status_code == 200
-        assert len(resolved.json()) == 1
+        assert len(resolved.json()["items"]) == 1
 
         stored = await _rows(
             database.superuser_dsn,  # type: ignore[attr-defined]
             _RESOLVED,
             (alert_id,),
         )
-        assert stored == [(True, "op-1", "resolved")]
+        assert stored == [(True, "op-1", "resolved", "confirmed fraud")]
         audit = await _rows(database.superuser_dsn, _AUDIT)  # type: ignore[attr-defined]
         assert audit == [(1,)]

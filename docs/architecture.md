@@ -93,7 +93,8 @@ call chain exceeds 2 services. Every sync call carries: connect/read timeouts,
 bounded retries with exponential backoff (idempotent GETs only), and a mapped
 `503`/`504` when the dependency is down (graceful degradation: the dashboard shows
 "features unavailable", partial results where possible). APIs are versioned under
-`/v1/`; OpenAPI specs are exported to [openapi/](openapi/).
+`/v1/`; OpenAPI specs are exported to [openapi/](openapi/). Contract changes are
+logged in [api-changelog.md](api-changelog.md).
 
 ### Correlation
 

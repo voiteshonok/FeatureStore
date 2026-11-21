@@ -49,6 +49,7 @@ def _apply(dsn: str) -> None:
             cur.execute(_ROLES_SQL)
             cur.execute((_POSTGRES / "10-schema.sql").read_text())
             cur.execute((_POSTGRES / "20-seed.sql").read_text())
+            cur.execute((_POSTGRES / "40-alerts-ui.sql").read_text())
 
 
 @dataclass(frozen=True)

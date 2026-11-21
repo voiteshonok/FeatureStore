@@ -31,7 +31,18 @@ from starlette.routing import Match
 from gateway.catalog import CatalogUnavailable, read_catalog
 from gateway.logging import configure_logging
 from gateway.metrics import METRICS, GatewayMetrics, start_metrics_server
-from gateway.models import AlertOut, AlertUpdate, CatalogEntry, ErrorBody, ReadyBody, Status
+from gateway.models import (
+    AlertDetailOut,
+    AlertListOut,
+    AlertOut,
+    AlertUpdate,
+    CatalogEntry,
+    ErrorBody,
+    ReadyBody,
+    RuleOut,
+    Sort,
+    Status,
+)
 from gateway.proxy import forward, new_client
 from gateway.settings import Settings
 from schemas import FeatureRequest, FeatureResponse
@@ -53,6 +64,7 @@ _BUSINESS_PATHS = (
     "/v1/features",
     "/v1/alerts",
     "/v1/alerts/{alert_id}",
+    "/v1/rules",
     "/v1/catalog",
 )
 _METHODS = frozenset({"get", "post", "patch", "put", "delete", "head", "options"})
@@ -261,11 +273,24 @@ def _install_routes(app: FastAPI, limiter: Limiter, rate: str) -> None:
         settings: Settings = request.app.state.settings
         return await _proxy(request, settings.detection_url, "detection")
 
+    @app.get("/v1/alerts/{alert_id}")
+    @limited
+    async def get_alert(request: Request, alert_id: str) -> Response:
+        _ = alert_id
+        settings: Settings = request.app.state.settings
+        return await _proxy(request, settings.detection_url, "detection")
+
     @app.patch("/v1/alerts/{alert_id}")
     @limited
     async def patch_alert(request: Request, alert_id: str) -> Response:
         # The id stays in the path. Detection validates it.
         _ = alert_id
+        settings: Settings = request.app.state.settings
+        return await _proxy(request, settings.detection_url, "detection")
+
+    @app.get("/v1/rules")
+    @limited
+    async def list_rules(request: Request) -> Response:
         settings: Settings = request.app.state.settings
         return await _proxy(request, settings.detection_url, "detection")
 
@@ -283,23 +308,47 @@ def _contract_app() -> FastAPI:
     def post_features(body: FeatureRequest) -> FeatureResponse:
         raise RuntimeError(body.card_token)
 
-    @contract.get("/v1/alerts", response_model=list[AlertOut])
+    @contract.get(
+        "/v1/alerts",
+        response_model=AlertListOut,
+        responses={422: {"description": "Invalid cursor or query"}},
+    )
     def list_alerts(
-        status: Annotated[Status, Query()],
+        status: Annotated[list[Status] | None, Query()] = None,
+        entity: Annotated[str | None, Query()] = None,
+        rule_id: Annotated[UUID | None, Query()] = None,
+        created_from: Annotated[str | None, Query()] = None,
+        created_to: Annotated[str | None, Query()] = None,
+        sort: Annotated[Sort, Query()] = "-created_at",
+        cursor: Annotated[str | None, Query()] = None,
         limit: Annotated[int, Query(ge=1, le=1000)] = 100,
-    ) -> list[AlertOut]:
-        raise RuntimeError(status, limit)
+    ) -> AlertListOut:
+        raise RuntimeError(status, entity, rule_id, created_from, created_to, sort, cursor, limit)
+
+    @contract.get(
+        "/v1/alerts/{alert_id}",
+        response_model=AlertDetailOut,
+        responses={404: {"description": "Unknown alert"}},
+    )
+    def get_alert(alert_id: UUID) -> AlertDetailOut:
+        raise RuntimeError(alert_id)
 
     @contract.patch(
         "/v1/alerts/{alert_id}",
         response_model=AlertOut,
         responses={
+            403: {"description": "Viewer cannot change status"},
             404: {"description": "Unknown alert"},
             409: {"description": "Invalid transition"},
+            422: {"description": "Missing or invalid note / headers"},
         },
     )
     def patch_alert(alert_id: UUID, body: AlertUpdate) -> AlertOut:
         raise RuntimeError(alert_id, body.status)
+
+    @contract.get("/v1/rules", response_model=list[RuleOut])
+    def list_rules() -> list[RuleOut]:
+        raise RuntimeError("openapi only")
 
     @contract.get("/v1/catalog", response_model=list[CatalogEntry])
     def get_catalog() -> list[CatalogEntry]:

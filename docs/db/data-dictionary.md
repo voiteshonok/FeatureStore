@@ -7,7 +7,7 @@ why three engines coexist is argued in `docs/criteria/database.md`.
 Structure is created exclusively by the scripts in
 [`infra/postgres/`](../../infra/postgres/) — `00-roles.sh` (roles; passwords from
 the environment, nothing in Git) → `10-schema.sql` → `20-seed.sql` →
-`30-baseline.sql` — mounted into `/docker-entrypoint-initdb.d` and executed once
+`30-baseline.sql`, `40-alerts-ui.sql` — mounted into `/docker-entrypoint-initdb.d` and executed once
 when the Postgres volume is created. No objects are created by hand.
 `30-baseline.sql` is the measurement stand, not a product schema (ADR-015).
 
@@ -159,12 +159,15 @@ stream features only (ADR-013).
 | feature_snapshot | jsonb NOT NULL | Justified below |
 | status | CHECK open/acknowledged/resolved | `resolved ⇔ resolved_at IS NOT NULL` (CHECK) |
 | acknowledged_by/at, resolved_by/at | text / timestamptz | Set by the alert API together with the status |
+| resolution_note | text, CHECK length 3–500 when set | Required by the API when resolving; audit trigger copies it into `detail` (`40-alerts-ui.sql`) |
 
 **Integrity in the schema, not in code:** two partial unique indexes guarantee at
 most one *open* alert per (rule, card) and per (rule, merchant) — duplicate
 inserts under Kafka at-least-once redelivery or concurrent consumers collapse at
-the database level. A third index `(rule_id, created_at DESC)` serves history
-reads.
+the database level. Indexes for reads: `(rule_id, created_at DESC)` for
+per-rule history; `(created_at DESC, alert_id DESC)` for keyset pagination;
+`(status, created_at DESC, alert_id DESC)` for status-filtered dashboard lists
+(`40-alerts-ui.sql`).
 
 **jsonb justification** (the rubric requires one for unstructured data in a
 relational model): `feature_snapshot` is a write-once, point-in-time copy of the
@@ -209,7 +212,7 @@ mechanism, explicit history.
 | fs_read / fs_write / fs_admin | Group tiers (NOLOGIN); svc accounts are members |
 | svc_ingestion | `ingestion`: insert/select/delete idempotency keys, execute cleanup |
 | svc_features | `features`: write registry |
-| svc_detection | `detection`: write alerts, read rules; `features`: read; `ref`: read + insert (registry upsert) |
+| svc_detection | `detection`: write alerts, read rules; `features`: read; `ref`: read + insert (registry upsert); `ops.audit_log`: SELECT (alert history for the dashboard) |
 | svc_gateway | read-only: open_alerts_v, alerts, alert_rules, merchants, feature registry, **operators_masked** (not operators) |
 | svc_baseline | `baseline.transactions`: select, insert. No other schema. Not a member of `fs_read` or `fs_write`. Measurement stand, not part of the product (ADR-015) |
 | container owner | schema owner — init/migrations only, never used by services |

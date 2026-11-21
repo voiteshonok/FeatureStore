@@ -47,5 +47,5 @@ in ADR-019 so the split is intentional, not accidental.
 | --- | --- | --- | --- |
 | 1 | Use an ORM | ✅ | SQLAlchemy 2.0 in `services/detection` CRUD (ADR-019) |
 | 2 | Layered architecture | ✅ | `detection/api`, `services`, `repositories`, `models` |
-| 3 | Global error handling | ⏳ | T7.2 |
-| 4 | Avoid vulnerable packages | ⏳ | T7.2 (`pip-audit`) |
+| 3 | Global error handling | ✅ | Problem Details handlers in each service; [docs/api-errors.md](../api-errors.md) |
+| 4 | Avoid vulnerable packages | ✅ | `make audit` / CI `uvx pip-audit` on `uv export --frozen` |

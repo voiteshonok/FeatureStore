@@ -168,7 +168,10 @@ async def test_redis_outage_on_read_is_503() -> None:
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post("/v1/features", json=_body())
     assert response.status_code == 503
-    assert response.json()["detail"] == "redis unavailable"
+    assert response.json()["type"] == "upstream_unavailable"
+    assert response.json()["title"] == "redis unavailable"
+    assert response.json()["status"] == 503
+    assert "request_id" in response.json()
 
 
 async def test_request_log_carries_the_request_id(

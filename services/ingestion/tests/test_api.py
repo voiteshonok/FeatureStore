@@ -113,15 +113,18 @@ async def _client(app: FastAPI) -> AsyncIterator[AsyncClient]:
         yield client
 
 
-def _locs(body: dict[str, object]) -> list[object]:
-    detail = body["detail"]
-    assert isinstance(detail, list)
-    locs: list[object] = []
-    for item in detail:
+def _fields(body: dict[str, object]) -> list[str]:
+    assert body["type"] == "validation_error"
+    assert body["status"] == 422
+    assert "request_id" in body
+    errors = body["errors"]
+    assert isinstance(errors, list)
+    fields: list[str] = []
+    for item in errors:
         assert isinstance(item, dict)
-        locs.append(item["loc"])
-        assert set(item) == {"loc", "msg", "type"}
-    return locs
+        assert set(item) == {"field", "message"}
+        fields.append(str(item["field"]))
+    return fields
 
 
 async def test_health_does_not_check_dependencies() -> None:
@@ -136,7 +139,7 @@ async def test_invalid_schema_names_the_field() -> None:
     async with _client(app) as client:
         response = await client.post("/v1/events", json=_body(currency="USD"))
     assert response.status_code == 422
-    assert ["body", "currency"] in _locs(response.json())
+    assert "currency" in _fields(response.json())
 
 
 async def test_bad_pan_is_not_echoed() -> None:
@@ -146,7 +149,7 @@ async def test_bad_pan_is_not_echoed() -> None:
         response = await client.post("/v1/events", json=_body(pan=BAD_PAN))
     assert response.status_code == 422
     assert BAD_PAN not in response.text
-    assert ["body", "pan"] in _locs(response.json())
+    assert "pan" in _fields(response.json())
 
 
 async def test_event_time_outside_the_window_names_the_field() -> None:
@@ -155,7 +158,7 @@ async def test_event_time_outside_the_window_names_the_field() -> None:
     async with _client(app) as client:
         response = await client.post("/v1/events", json=_body(event_time=old))
     assert response.status_code == 422
-    assert ["body", "event_time"] in _locs(response.json())
+    assert "event_time" in _fields(response.json())
 
 
 async def test_accepted_event_returns_202() -> None:

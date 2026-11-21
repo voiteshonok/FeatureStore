@@ -3,10 +3,11 @@
 from collections.abc import AsyncIterator
 from typing import Annotated, Literal
 
-from fastapi import Header, HTTPException, Request
+from fastapi import Header, Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from detection.services.alerts import AlertService
+from schemas import AppProblem
 
 OperatorRole = Literal["viewer", "analyst", "admin"]
 
@@ -24,7 +25,7 @@ def require_operator_id(
     """Operator id set by the gateway after JWT verification (T7.3)."""
     value = x_operator_id.strip()
     if not value:
-        raise HTTPException(status_code=422, detail="X-Operator-Id must not be empty")
+        raise AppProblem("validation_error", "X-Operator-Id must not be empty", 422)
     return value
 
 

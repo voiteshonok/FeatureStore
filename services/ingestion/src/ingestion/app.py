@@ -12,20 +12,20 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.exceptions import RequestValidationError
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from psycopg import AsyncConnection
 from psycopg.rows import TupleRow
 from psycopg_pool import AsyncConnectionPool
 from pydantic import BaseModel
 
+from ingestion.errors import install_error_handlers, install_request_id_middleware
 from ingestion.idempotency import AcceptResult, IdempotencyStore
-from ingestion.logging import JsonFormatter, PanMaskFilter, mask_pans
+from ingestion.logging import JsonFormatter, PanMaskFilter
 from ingestion.metrics import METRICS, IngestionMetrics, start_metrics_server
 from ingestion.publisher import KafkaPublisher, PublishError
 from ingestion.tokenize import load_key, to_event
-from schemas import PaymentIn, check_event_time
+from schemas import AppProblem, FieldError, PaymentIn, check_event_time
 
 _READY_TIMEOUT_S = 1.0
 _DELETE_EXPIRED = "SELECT ingestion.delete_expired_idempotency_keys()"
@@ -81,24 +81,6 @@ def _configure_logging() -> None:
     logger.addHandler(handler)
     logger.setLevel(logging.INFO)
     logger.propagate = False
-
-
-def _field_error(field: str, message: str) -> list[dict[str, object]]:
-    return [{"loc": ["body", field], "msg": mask_pans(message), "type": "value_error"}]
-
-
-def _validation_error(_request: Request, exc: Exception) -> JSONResponse:
-    if not isinstance(exc, RequestValidationError):
-        raise exc
-    detail = [
-        {
-            "loc": list(err.get("loc", ())),
-            "msg": mask_pans(str(err.get("msg", ""))),
-            "type": str(err.get("type", "value_error")),
-        }
-        for err in exc.errors()
-    ]
-    return JSONResponse(status_code=422, content={"detail": detail})
 
 
 async def _postgres_ready(pool: AsyncConnectionPool[AsyncConnection[TupleRow]]) -> bool:
@@ -168,12 +150,14 @@ def create_app(
     settings: Settings | None = None,
     *,
     metrics: IngestionMetrics | None = None,
+    include_test_routes: bool = False,
 ) -> FastAPI:
     """Build the ingestion API. Importing this module does not open connections."""
     app = FastAPI(title="ingestion", lifespan=_lifespan)
     app.state.settings = settings or Settings.from_env()
     app.state.metrics = METRICS if metrics is None else metrics
-    app.add_exception_handler(RequestValidationError, _validation_error)
+    install_request_id_middleware(app)
+    install_error_handlers(app)
 
     @app.get("/health")
     async def health() -> dict[str, str]:
@@ -197,7 +181,12 @@ def create_app(
             reason = check_event_time(payment.event_time, datetime.now(UTC))
             if reason is not None:
                 status_code = 422
-                raise HTTPException(status_code=422, detail=_field_error("event_time", reason))
+                raise AppProblem(
+                    "validation_error",
+                    "Request validation failed",
+                    422,
+                    errors=[FieldError(field="event_time", message=reason)],
+                )
             event = to_event(payment, request.app.state.hmac_key, datetime.now(UTC))
             try:
                 result = await request.app.state.store.accept(
@@ -207,9 +196,10 @@ def create_app(
             except PublishError:
                 status_code = 503
                 result_label = "unavailable"
-                raise HTTPException(
-                    status_code=503,
-                    detail="event bus unavailable",
+                raise AppProblem(
+                    "upstream_unavailable",
+                    "event bus unavailable",
+                    503,
                     headers={"Retry-After": "1"},
                 ) from None
             status_code = 202
@@ -221,6 +211,12 @@ def create_app(
             metrics.request_duration.labels(status=str(status_code)).observe(
                 time.perf_counter() - started
             )
+
+    if include_test_routes:
+
+        @app.get("/__test__/boom")
+        async def boom() -> None:
+            raise RuntimeError("boom pan 4111111111111111")
 
     return app
 

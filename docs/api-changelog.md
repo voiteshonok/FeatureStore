@@ -2,6 +2,15 @@
 
 Breaking and notable contract changes for the public `/v1/` surface (gateway).
 
+## 2026-11-21 — Unified Problem Details errors (T7.2)
+
+**Breaking** for clients that parsed `{"detail": ...}`.
+
+Gateway-owned 401 / 403 / 429 / 503 / 504 and all service-local errors now use
+`{type, title, status, request_id, errors}` (see [api-errors.md](api-errors.md)).
+Upstream proxied bodies are unchanged. Timeouts at the gateway are **504**
+(`upstream_timeout`); connect failures remain **503**.
+
 ## 2026-11-21 — Detection alerts list shape (T7.1)
 
 **Breaking.** `GET /v1/alerts` no longer returns a bare JSON array.

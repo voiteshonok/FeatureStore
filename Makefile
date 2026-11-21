@@ -4,7 +4,7 @@ PROFILES := --profile baseline --profile obs --profile sim
 KAFKA_BOOTSTRAP := localhost:9092
 KAFKA_TOPICS := /opt/kafka/bin/kafka-topics.sh
 
-.PHONY: up down logs ps topics secret lint typecheck test test-int test-e2e clean openapi pan-scan obs-up baseline-up backfill exp-k1k2 exp-k1k2-short exp-ladder
+.PHONY: up down logs ps topics secret lint typecheck test test-int test-e2e clean openapi pan-scan audit obs-up baseline-up backfill exp-k1k2 exp-k1k2-short exp-ladder
 
 up:
 	$(COMPOSE) up -d --wait kafka postgres redis clickhouse
@@ -88,6 +88,10 @@ openapi:
 
 pan-scan:
 	PYTHONPATH=tools uv run python -m pan_scan
+
+audit:
+	uv export --frozen --no-dev --no-emit-workspace -o /tmp/featurestore-reqs.txt
+	uvx pip-audit -r /tmp/featurestore-reqs.txt
 
 clean:
 	$(COMPOSE) $(PROFILES) down -v

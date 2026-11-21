@@ -29,6 +29,7 @@ from starlette.responses import Response
 from starlette.routing import Match
 
 from gateway.catalog import CatalogUnavailable, read_catalog
+from gateway.errors import install_error_handlers, problem_response, unhandled_response
 from gateway.logging import configure_logging
 from gateway.metrics import METRICS, GatewayMetrics, start_metrics_server
 from gateway.models import (
@@ -37,7 +38,7 @@ from gateway.models import (
     AlertOut,
     AlertUpdate,
     CatalogEntry,
-    ErrorBody,
+    ProblemDetails,
     ReadyBody,
     RuleOut,
     Sort,
@@ -73,6 +74,7 @@ _GATEWAY_ERRORS = {
     "403": "Unknown API key",
     "429": "Rate limit exceeded",
     "503": "Upstream or catalog unavailable",
+    "504": "Upstream timeout",
 }
 
 
@@ -88,10 +90,20 @@ def _authenticate(request: Request) -> str | JSONResponse:
     settings: Settings = request.app.state.settings
     presented = request.headers.get("x-api-key")
     if presented is None or presented.strip() == "":
-        return JSONResponse(status_code=401, content={"detail": "missing api key"})
+        return problem_response(
+            request,
+            type="unauthorized",
+            title="missing api key",
+            status=401,
+        )
     client = settings.api_keys.get(presented)
     if client is None:
-        return JSONResponse(status_code=403, content={"detail": "unknown api key"})
+        return problem_response(
+            request,
+            type="forbidden",
+            title="unknown api key",
+            status=403,
+        )
     return client
 
 
@@ -159,7 +171,8 @@ def _install_middleware(app: FastAPI) -> None:
         request_id = incoming or str(uuid4())
         request.state.request_id = request_id
         client: str | None = None
-        if request.url.path not in _OPEN_PATHS:
+        # ``/__test__/`` routes are only mounted in unit tests (include_test_routes).
+        if request.url.path not in _OPEN_PATHS and not request.url.path.startswith("/__test__/"):
             authenticated = _authenticate(request)
             if isinstance(authenticated, JSONResponse):
                 authenticated.headers["X-Request-ID"] = request_id
@@ -168,7 +181,11 @@ def _install_middleware(app: FastAPI) -> None:
                 return authenticated
             client = authenticated
             request.state.client = client
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            # BaseHTTPMiddleware can re-raise past ExceptionMiddleware.
+            response = unhandled_response(request, exc)
         response.headers["X-Request-ID"] = request_id
         _log_request(request, request_id, client, response.status_code, started)
         _observe_request(request, response.status_code, started)
@@ -176,7 +193,12 @@ def _install_middleware(app: FastAPI) -> None:
 
 
 def _rate_limit_exceeded(request: Request, _exc: Exception) -> JSONResponse:
-    response = JSONResponse(status_code=429, content={"detail": "rate limit exceeded"})
+    response = problem_response(
+        request,
+        type="rate_limited",
+        title="rate limit exceeded",
+        status=429,
+    )
     current = getattr(request.state, "view_rate_limit", None)
     limiter = getattr(request.app.state, "limiter", None)
     if current is not None and limiter is not None:
@@ -189,9 +211,6 @@ def _rate_limit_exceeded(request: Request, _exc: Exception) -> JSONResponse:
                 response = updated
     if "retry-after" not in response.headers:
         response.headers["Retry-After"] = "1"
-    request_id = _request_id_from(request)
-    if request_id:
-        response.headers["X-Request-ID"] = request_id
     metrics: GatewayMetrics = request.app.state.metrics
     client = getattr(request.state, "client", None)
     name = client if isinstance(client, str) and client else "anonymous"
@@ -243,7 +262,12 @@ async def _catalog(request: Request) -> Response:
     try:
         rows = await read_catalog(request.app.state.pool)
     except CatalogUnavailable:
-        return JSONResponse(status_code=503, content={"detail": "catalog unavailable"})
+        return problem_response(
+            request,
+            type="upstream_unavailable",
+            title="catalog unavailable",
+            status=503,
+        )
     return JSONResponse(content=rows)
 
 
@@ -361,7 +385,9 @@ def _error_response(description: str) -> dict[str, Any]:
     return {
         "description": description,
         "content": {
-            "application/json": {"schema": {"$ref": "#/components/schemas/ErrorBody"}},
+            "application/json": {
+                "schema": {"$ref": "#/components/schemas/ProblemDetails"},
+            },
         },
     }
 
@@ -375,7 +401,7 @@ def _apply_contract(schema: dict[str, Any]) -> None:
     components = schema.setdefault("components", {})
     models = components.setdefault("schemas", {})
     models.update(contract.get("components", {}).get("schemas", {}))
-    models["ErrorBody"] = ErrorBody.model_json_schema()
+    models["ProblemDetails"] = ProblemDetails.model_json_schema()
     components["securitySchemes"] = {
         "ApiKey": {
             "type": "apiKey",
@@ -449,6 +475,7 @@ def create_app(
     settings: Settings | None = None,
     *,
     metrics: GatewayMetrics | None = None,
+    include_test_routes: bool = False,
 ) -> FastAPI:
     """Build the gateway. Importing this module does not open connections."""
     resolved = settings if settings is not None else Settings.from_env()
@@ -465,9 +492,16 @@ def create_app(
         swallow_errors=False,
     )
     app.state.limiter = limiter
+    install_error_handlers(app)
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded)
     _install_middleware(app)
     _install_routes(app, limiter, resolved.rate_limit)
+    if include_test_routes:
+
+        @app.get("/__test__/boom")
+        async def boom() -> None:
+            raise RuntimeError("boom pan 4111111111111111")
+
     _bind_openapi(app)
     return app
 

@@ -48,7 +48,10 @@ async def test_transport_failures_retry_only_get(
     assert calls["n"] == attempts
     assert recorded == sleeps
     assert response.status_code == 503
-    assert response.json() == {"detail": detail}
+    assert response.json()["type"] == "upstream_unavailable"
+    assert response.json()["title"] == detail
+    assert response.json()["status"] == 503
+    assert "request_id" in response.json()
 
 
 async def test_get_succeeds_on_the_second_attempt(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -167,6 +170,27 @@ async def test_get_forwards_the_query_string() -> None:
         await gateway.aclose()
     assert response.status_code == 200
     assert seen == ["http://detection.test/v1/alerts?status=open&limit=10"]
+
+
+async def test_timeout_maps_to_504(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorded: list[float] = []
+
+    async def fake_pause(seconds: float) -> None:
+        recorded.append(seconds)
+
+    calls, handler = _failing(httpx.ReadTimeout)
+    monkeypatch.setattr("gateway.proxy.pause", fake_pause)
+    gateway = await mount(handler)  # type: ignore[arg-type]
+    try:
+        response = await send(gateway.app, "GET", "/v1/alerts?status=open")
+    finally:
+        await gateway.aclose()
+    assert calls["n"] == 3
+    assert recorded == [0.1, 0.4]
+    assert response.status_code == 504
+    assert response.json()["type"] == "upstream_timeout"
+    assert response.json()["title"] == "detection timeout"
+    assert response.json()["status"] == 504
 
 
 async def test_pause_sleeps(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -203,12 +203,7 @@ class OfflineWriter:
             sleep,
         )
         try:
-            client = await clickhouse_connect.get_async_client(
-                dsn=settings.clickhouse_url,
-                username=settings.clickhouse_user,
-                password=settings.clickhouse_password,
-                database=settings.clickhouse_db,
-            )
+            client = await cls._open_clickhouse(settings)
         except Exception:
             await _quiet(consumer.stop)
             raise
@@ -220,6 +215,15 @@ class OfflineWriter:
             monotonic=monotonic,
             sleep=sleep,
             metrics=OFFLINE_METRICS if metrics is None else metrics,
+        )
+
+    @staticmethod
+    async def _open_clickhouse(settings: Settings) -> Any:
+        return await clickhouse_connect.get_async_client(
+            dsn=settings.clickhouse_url,
+            username=settings.clickhouse_user,
+            password=settings.clickhouse_password,
+            database=settings.clickhouse_db,
         )
 
     async def aclose(self) -> None:
@@ -344,8 +348,25 @@ class OfflineWriter:
                     "flush failed",
                     exc_info=_exc_info(exc),
                 )
+                await self._refresh_lag()
+                await self._reconnect_clickhouse()
                 await self.sleep(backoff)
                 backoff = self._flush_backoff_s
+
+    async def _reconnect_clickhouse(self) -> None:
+        """Replace a dead ClickHouse client after stop/restart (ADR-018)."""
+        old = self.clickhouse
+        try:
+            self.clickhouse = await self._open_clickhouse(self.settings)
+        except Exception as exc:
+            if not _is_retryable(exc):
+                raise
+            logging.getLogger("features.offline").warning(
+                "clickhouse reconnect failed",
+                exc_info=_exc_info(exc),
+            )
+            return
+        await _quiet(old.close)
 
     async def _flush(self) -> None:
         if not self._buffer:
@@ -413,11 +434,17 @@ class OfflineWriter:
         try:
             ends = await self.consumer.end_offsets(assignment)
             for tp in assignment:
-                position = await self.consumer.position(tp)
+                # Use the committed offset so lag stays visible while a fetched
+                # batch is held during ClickHouse retries (position already moved).
+                committed = await self.consumer.committed(tp)
+                if committed is None:
+                    cursor = await self.consumer.position(tp)
+                else:
+                    cursor = committed
                 self.metrics.consumer_lag.labels(
                     topic=tp.topic,
                     partition=str(tp.partition),
-                ).set(ends[tp] - position)
+                ).set(max(0, ends[tp] - cursor))
         except Exception as exc:
             if not _is_retryable(exc):
                 raise

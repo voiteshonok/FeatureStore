@@ -148,7 +148,7 @@ flowchart TB
 | --- | --- |
 | Kafka down | ingestion: `503 + Retry-After` to clients, no data loss accepted silently (ADR-006); consumers resume from committed offsets |
 | Redis down | features-api not ready (503); worker pauses without committing offsets and rebuilds windows from Kafka replay (ADR-002/003). Serving `fallback` from the offline store is the stage-5 path (ADR-013) |
-| ClickHouse down | offline-writer keeps one batch in memory, retries insert with backoff, does not commit offsets; lag accumulates in Kafka. Online Redis path is unaffected (ADR-001, ADR-018) |
+| ClickHouse down | offline-writer keeps one batch in memory, retries insert with backoff, does not commit offsets; lag accumulates in Kafka. Online Redis path is unaffected (ADR-001, ADR-018). Evidence: `services/features/tests/test_offline_recovery.py`, `tests/e2e/test_stage4_offline.py` |
 | Postgres down | ingestion not ready (`/ready` 503); detection buffers via consumer lag |
 | features down | gateway returns degraded response after timeout; detection lags, catches up from topic |
 | duplicate/replayed events | idempotency store at ingestion; idempotent handlers downstream (ADR-003) |

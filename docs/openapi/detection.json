@@ -45,21 +45,131 @@
     },
     "/v1/alerts": {
       "get": {
+        "tags": [
+          "alerts"
+        ],
         "summary": "List Alerts",
         "operationId": "list_alerts_v1_alerts_get",
         "parameters": [
           {
             "name": "status",
             "in": "query",
-            "required": true,
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "open",
+                      "acknowledged",
+                      "resolved"
+                    ],
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "entity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Entity"
+            }
+          },
+          {
+            "name": "rule_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rule Id"
+            }
+          },
+          {
+            "name": "created_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created From"
+            }
+          },
+          {
+            "name": "created_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created To"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
             "schema": {
               "enum": [
-                "open",
-                "acknowledged",
-                "resolved"
+                "created_at",
+                "-created_at"
               ],
               "type": "string",
-              "title": "Status"
+              "default": "-created_at",
+              "title": "Sort"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
             }
           },
           {
@@ -81,14 +191,49 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/AlertOut"
-                  },
-                  "title": "Response List Alerts V1 Alerts Get"
+                  "$ref": "#/components/schemas/AlertListOut"
                 }
               }
             }
+          },
+          "422": {
+            "description": "Invalid cursor or query"
+          }
+        }
+      }
+    },
+    "/v1/alerts/{alert_id}": {
+      "get": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Get Alert",
+        "operationId": "get_alert_v1_alerts__alert_id__get",
+        "parameters": [
+          {
+            "name": "alert_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Alert Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertDetailOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown alert"
           },
           "422": {
             "description": "Validation Error",
@@ -101,10 +246,11 @@
             }
           }
         }
-      }
-    },
-    "/v1/alerts/{alert_id}": {
+      },
       "patch": {
+        "tags": [
+          "alerts"
+        ],
         "summary": "Patch Alert",
         "operationId": "patch_alert_v1_alerts__alert_id__patch",
         "parameters": [
@@ -116,6 +262,29 @@
               "type": "string",
               "format": "uuid",
               "title": "Alert Id"
+            }
+          },
+          {
+            "name": "X-Operator-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "X-Operator-Id"
+            }
+          },
+          {
+            "name": "X-Operator-Role",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "enum": [
+                "viewer",
+                "analyst",
+                "admin"
+              ],
+              "type": "string",
+              "title": "X-Operator-Role"
             }
           }
         ],
@@ -140,6 +309,9 @@
               }
             }
           },
+          "403": {
+            "description": "Viewer cannot change status"
+          },
           "404": {
             "description": "Unknown alert"
           },
@@ -147,11 +319,29 @@
             "description": "Invalid transition"
           },
           "422": {
-            "description": "Validation Error",
+            "description": "Missing or invalid note / headers"
+          }
+        }
+      }
+    },
+    "/v1/rules": {
+      "get": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "List Rules",
+        "operationId": "list_rules_v1_rules_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "items": {
+                    "$ref": "#/components/schemas/RuleOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Rules V1 Rules Get"
                 }
               }
             }
@@ -162,6 +352,62 @@
   },
   "components": {
     "schemas": {
+      "AlertDetailOut": {
+        "properties": {
+          "alert": {
+            "$ref": "#/components/schemas/AlertOut"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/RuleOut"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/AuditEntryOut"
+            },
+            "type": "array",
+            "title": "History"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "alert",
+          "rule",
+          "history"
+        ],
+        "title": "AlertDetailOut",
+        "description": "Alert card: row, rule, and audit history."
+      },
+      "AlertListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AlertOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "AlertListOut",
+        "description": "Keyset page of alerts."
+      },
       "AlertOut": {
         "properties": {
           "alert_id": {
@@ -252,6 +498,17 @@
               }
             ],
             "title": "Acknowledged At"
+          },
+          "resolution_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Note"
           }
         },
         "additionalProperties": false,
@@ -282,20 +539,71 @@
             ],
             "title": "Status"
           },
-          "operator_id": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Operator Id"
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 3
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "status",
-          "operator_id"
+          "status"
         ],
         "title": "AlertUpdate",
         "description": "Body of ``PATCH /v1/alerts/{alert_id}``."
+      },
+      "AuditEntryOut": {
+        "properties": {
+          "audit_id": {
+            "type": "integer",
+            "title": "Audit Id"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Occurred At"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Detail"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "audit_id",
+          "occurred_at",
+          "actor",
+          "action",
+          "detail"
+        ],
+        "title": "AuditEntryOut",
+        "description": "One ``ops.audit_log`` row for an alert."
       },
       "HTTPValidationError": {
         "properties": {
@@ -309,6 +617,80 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "RuleConditionOut": {
+        "properties": {
+          "feature_name": {
+            "type": "string",
+            "title": "Feature Name"
+          },
+          "comparison": {
+            "type": "string",
+            "enum": [
+              "gt",
+              "ge",
+              "lt",
+              "le"
+            ],
+            "title": "Comparison"
+          },
+          "threshold": {
+            "type": "number",
+            "title": "Threshold"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "feature_name",
+          "comparison",
+          "threshold"
+        ],
+        "title": "RuleConditionOut",
+        "description": "One comparison clause."
+      },
+      "RuleOut": {
+        "properties": {
+          "rule_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Rule Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "entity": {
+            "type": "string",
+            "enum": [
+              "card",
+              "merchant"
+            ],
+            "title": "Entity"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/RuleConditionOut"
+            },
+            "type": "array",
+            "title": "Conditions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "rule_id",
+          "name",
+          "entity",
+          "enabled",
+          "conditions"
+        ],
+        "title": "RuleOut",
+        "description": "Rule with conditions \u2014 for filters and alert detail."
       },
       "ValidationError": {
         "properties": {

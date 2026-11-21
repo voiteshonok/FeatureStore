@@ -55,7 +55,7 @@ startup upsert keeps them consistent and versions accumulate as history.
 
 - Roles (env-based passwords): `infra/postgres/00-roles.sh`; ClickHouse
   service users: `infra/clickhouse/00-users.sh`
-- DDL: `infra/postgres/10-schema.sql` · Seed: `infra/postgres/20-seed.sql`;
+- DDL: `infra/postgres/10-schema.sql`, `40-alerts-ui.sql` · Seed: `infra/postgres/20-seed.sql`;
   ClickHouse offline DDL + grants: `infra/clickhouse/10-schema.sql`
 - Baseline stand (not a product schema): `infra/postgres/30-baseline.sql`, role `svc_baseline`
 - Data dictionary, ER diagram, integrity, versioning:

@@ -72,6 +72,12 @@ def _forward_headers(request: Request, request_id: str) -> dict[str, str]:
     content_type = request.headers.get("content-type")
     if content_type is not None:
         headers["content-type"] = content_type
+    # Operator identity is set by the gateway after JWT login (T7.3). Until then
+    # clients may send the headers; detection requires them on PATCH.
+    for name in ("x-operator-id", "x-operator-role"):
+        value = request.headers.get(name)
+        if value is not None:
+            headers[name] = value
     return headers
 
 

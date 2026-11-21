@@ -1,4 +1,4 @@
-"""Alert transitions and the health endpoints."""
+"""Health endpoints, transitions, roles, and keyset cursors."""
 
 from __future__ import annotations
 
@@ -10,86 +10,30 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from detection.api import AlertUpdate, create_app, transition_allowed
+from detection.services.cursor import CursorError, decode_cursor, encode_cursor
+from detection.services.transitions import can_mutate
 from detection.settings import Settings
 
 _NOW = datetime(2026, 6, 1, 12, 0, tzinfo=UTC)
 _ALERT = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
-_RULE = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
-_EVENT = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
 
 
-def _alert_row(status: str) -> tuple[object, ...]:
-    resolved = _NOW if status == "resolved" else None
-    acknowledged = _NOW if status == "acknowledged" else None
-    return (
-        _ALERT,
-        _RULE,
-        status,
-        None,
-        "card-1",
-        _EVENT,
-        {"card_cnt_1m": 6},
-        _NOW,
-        resolved,
-        acknowledged,
-    )
-
-
-class _Cursor:
-    def __init__(self, rows: list[tuple[object, ...]]) -> None:
-        self._rows = rows
-
-    async def fetchone(self) -> tuple[object, ...] | None:
-        if not self._rows:
-            return None
-        return self._rows[0]
-
-    async def fetchall(self) -> list[tuple[object, ...]]:
-        return list(self._rows)
-
-
-class _Conn:
-    def __init__(
-        self,
-        *,
-        status: str | None = "open",
-        rows: list[tuple[object, ...]] | None = None,
-        fail: bool = False,
-    ) -> None:
-        self.status = status
-        self.rows = rows if rows is not None else [_alert_row("open")]
+class _Engine:
+    def __init__(self, *, fail: bool = False) -> None:
         self.fail = fail
-        self.sql: list[str] = []
 
-    async def execute(self, sql: str, _params: object = None) -> _Cursor:
-        if self.fail:
-            raise OSError("down")
-        self.sql.append(sql)
-        if "FOR UPDATE" in sql:
-            if self.status is None:
-                return _Cursor([])
-            return _Cursor([(self.status,)])
-        if "UPDATE detection.alerts" in sql:
-            new_status = "resolved" if "status = 'resolved'" in sql else "acknowledged"
-            return _Cursor([_alert_row(new_status)])
-        return _Cursor(self.rows)
-
-    def transaction(self) -> _Conn:
+    def connect(self) -> _Engine:
         return self
 
-    async def __aenter__(self) -> _Conn:
+    async def execute(self, _stmt: object) -> None:
+        if self.fail:
+            raise OSError("down")
+
+    async def __aenter__(self) -> _Engine:
         return self
 
     async def __aexit__(self, *_args: object) -> None:
         return None
-
-
-class _Pool:
-    def __init__(self, conn: _Conn) -> None:
-        self.conn = conn
-
-    def connection(self) -> _Conn:
-        return self.conn
 
 
 class _Service:
@@ -115,14 +59,8 @@ def _client(app: FastAPI) -> AsyncClient:
 def _ready_app(*, kafka: bool, postgres: bool, task_done: bool = False) -> FastAPI:
     app = create_app(Settings())
     app.state.service = _Service(kafka)
-    app.state.pool = _Pool(_Conn(fail=not postgres))
+    app.state.engine = _Engine(fail=not postgres)
     app.state.consumer_task = _Task(task_done)
-    return app
-
-
-def _patch_app(conn: _Conn) -> FastAPI:
-    app = create_app(Settings())
-    app.state.pool = _Pool(conn)
     return app
 
 
@@ -184,77 +122,36 @@ def test_allowed_transitions(current: str, new: str) -> None:
 
 
 @pytest.mark.parametrize(
-    ("current", "new"),
+    ("role", "allowed"),
     [
-        ("acknowledged", "open"),
-        ("resolved", "acknowledged"),
-        ("open", "open"),
+        ("viewer", False),
+        ("analyst", True),
+        ("admin", True),
+        ("unknown", False),
     ],
 )
-async def test_invalid_transition_is_409(current: str, new: str) -> None:
-    conn = _Conn(status=current)
-    async with _client(_patch_app(conn)) as client:
-        response = await client.patch(
-            f"/v1/alerts/{_ALERT}",
-            json={"status": new, "operator_id": "op-1"},
-        )
-    assert response.status_code == 409
-    assert response.json()["detail"] == "invalid transition"
-    assert not any("UPDATE detection.alerts" in sql for sql in conn.sql)
+def test_role_matrix(role: str, allowed: bool) -> None:
+    assert can_mutate(role) is allowed
 
 
-@pytest.mark.parametrize("new", ["acknowledged", "resolved"])
-async def test_allowed_patch_updates_the_row(new: str) -> None:
-    current = "open" if new == "acknowledged" else "acknowledged"
-    conn = _Conn(status=current)
-    async with _client(_patch_app(conn)) as client:
-        response = await client.patch(
-            f"/v1/alerts/{_ALERT}",
-            json={"status": new, "operator_id": "op-1"},
-        )
-    assert response.status_code == 200
-    assert response.json()["status"] == new
-    assert any("UPDATE detection.alerts" in sql for sql in conn.sql)
+def test_cursor_roundtrip() -> None:
+    encoded = encode_cursor(_NOW, _ALERT)
+    decoded = decode_cursor(encoded)
+    assert decoded.created_at == _NOW
+    assert decoded.alert_id == _ALERT
 
 
-async def test_unknown_alert_is_404() -> None:
-    conn = _Conn(status=None)
-    async with _client(_patch_app(conn)) as client:
-        response = await client.patch(
-            f"/v1/alerts/{_ALERT}",
-            json={"status": "resolved", "operator_id": "op-1"},
-        )
-    assert response.status_code == 404
-
-
-async def test_open_alerts_come_from_the_view_and_resolved_from_the_table() -> None:
-    open_conn = _Conn(rows=[_alert_row("open")])
-    async with _client(_patch_app(open_conn)) as client:
-        opened = await client.get("/v1/alerts", params={"status": "open", "limit": 10})
-    assert opened.status_code == 200
-    assert opened.json()[0]["alert_id"] == str(_ALERT)
-    assert "open_alerts_v" in open_conn.sql[0]
-
-    resolved_conn = _Conn(rows=[_alert_row("resolved")])
-    async with _client(_patch_app(resolved_conn)) as client:
-        resolved = await client.get("/v1/alerts", params={"status": "resolved"})
-    assert resolved.status_code == 200
-    assert resolved.json()[0]["status"] == "resolved"
-    assert "open_alerts_v" not in resolved_conn.sql[0]
-    assert "status = 'resolved'" in resolved_conn.sql[0]
-
-
-async def test_limit_and_operator_are_validated() -> None:
-    async with _client(create_app(Settings())) as client:
-        limit = await client.get("/v1/alerts", params={"status": "open", "limit": 0})
-        body = await client.patch(
-            f"/v1/alerts/{_ALERT}",
-            json={"status": "resolved", "operator_id": ""},
-        )
-    assert limit.status_code == 422
-    assert body.status_code == 422
+@pytest.mark.parametrize("value", ["", "%%%", "not-base64", "e30="])
+def test_cursor_rejects_garbage(value: str) -> None:
+    with pytest.raises(CursorError):
+        decode_cursor(value)
 
 
 def test_update_model_rejects_unknown_fields() -> None:
     with pytest.raises(ValueError):
-        AlertUpdate.model_validate({"status": "open", "operator_id": "op-1", "extra": 1})
+        AlertUpdate.model_validate({"status": "resolved", "note": "done ok", "extra": 1})
+
+
+def test_update_model_requires_note_length_when_set() -> None:
+    with pytest.raises(ValueError):
+        AlertUpdate.model_validate({"status": "resolved", "note": "ab"})

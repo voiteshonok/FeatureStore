@@ -42,6 +42,13 @@ def parse_api_keys(raw: str) -> dict[str, str]:
     return mapping
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 @dataclass(frozen=True)
 class Settings:
     """Gateway settings.
@@ -49,7 +56,8 @@ class Settings:
     ``api_keys`` maps the secret to the client name used in logs and the
     rate-limit bucket. ``rate_limit`` is a limits string, default ``100/second``
     (ADR-008). ``metrics_port`` serves Prometheus; 0 leaves the server off
-    (ADR-014).
+    (ADR-014). ``jwt_secret`` is set in tests; production loads from
+    ``jwt_secret_path`` / ``JWT_SECRET_FILE`` at lifespan (ADR-020).
     """
 
     api_keys: Mapping[str, str] = field(default_factory=dict)
@@ -58,6 +66,9 @@ class Settings:
     detection_url: str = _DEFAULT_DETECTION_URL
     database_url: str = _DEFAULT_DATABASE_URL
     metrics_port: int = 9000
+    jwt_secret: bytes | None = None
+    jwt_secret_path: str | None = None
+    cookie_secure: bool = False
 
     def __post_init__(self) -> None:
         parsed = parse_many(self.rate_limit)
@@ -84,4 +95,6 @@ class Settings:
             detection_url=os.environ.get("DETECTION_URL", _DEFAULT_DETECTION_URL),
             database_url=os.environ.get("DATABASE_URL", _DEFAULT_DATABASE_URL),
             metrics_port=int(os.environ.get("METRICS_PORT", "9000")),
+            jwt_secret_path=os.environ.get("JWT_SECRET_FILE"),
+            cookie_secure=_env_bool("GATEWAY_COOKIE_SECURE", False),
         )

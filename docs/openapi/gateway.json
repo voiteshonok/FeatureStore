@@ -55,6 +55,259 @@
         }
       }
     },
+    "/v1/auth/login": {
+      "post": {
+        "summary": "Login",
+        "operationId": "login_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing credentials or invalid session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream or catalog unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Upstream timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Correlation id. Generated when the header is empty."
+          }
+        ]
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "summary": "Logout",
+        "operationId": "logout_v1_auth_logout_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing credentials or invalid session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream or catalog unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Upstream timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Correlation id. Generated when the header is empty."
+          }
+        ]
+      }
+    },
+    "/v1/auth/me": {
+      "get": {
+        "summary": "Me",
+        "operationId": "me_v1_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing credentials or invalid session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream or catalog unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Upstream timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Correlation id. Generated when the header is empty."
+          }
+        ]
+      }
+    },
     "/v1/features": {
       "post": {
         "summary": "Post Features",
@@ -91,7 +344,7 @@
             }
           },
           "401": {
-            "description": "Missing API key",
+            "description": "Missing credentials or invalid session",
             "content": {
               "application/json": {
                 "schema": {
@@ -101,7 +354,7 @@
             }
           },
           "403": {
-            "description": "Unknown API key",
+            "description": "Forbidden",
             "content": {
               "application/json": {
                 "schema": {
@@ -144,6 +397,9 @@
         "security": [
           {
             "ApiKey": []
+          },
+          {
+            "SessionCookie": []
           }
         ],
         "parameters": [
@@ -320,7 +576,7 @@
             "description": "Invalid cursor or query"
           },
           "401": {
-            "description": "Missing API key",
+            "description": "Missing credentials or invalid session",
             "content": {
               "application/json": {
                 "schema": {
@@ -330,7 +586,7 @@
             }
           },
           "403": {
-            "description": "Unknown API key",
+            "description": "Forbidden",
             "content": {
               "application/json": {
                 "schema": {
@@ -373,6 +629,9 @@
         "security": [
           {
             "ApiKey": []
+          },
+          {
+            "SessionCookie": []
           }
         ]
       }
@@ -427,7 +686,7 @@
             }
           },
           "401": {
-            "description": "Missing API key",
+            "description": "Missing credentials or invalid session",
             "content": {
               "application/json": {
                 "schema": {
@@ -437,7 +696,7 @@
             }
           },
           "403": {
-            "description": "Unknown API key",
+            "description": "Forbidden",
             "content": {
               "application/json": {
                 "schema": {
@@ -480,6 +739,9 @@
         "security": [
           {
             "ApiKey": []
+          },
+          {
+            "SessionCookie": []
           }
         ]
       },
@@ -529,7 +791,7 @@
             }
           },
           "403": {
-            "description": "Unknown API key",
+            "description": "Forbidden",
             "content": {
               "application/json": {
                 "schema": {
@@ -548,7 +810,7 @@
             "description": "Missing or invalid note / headers"
           },
           "401": {
-            "description": "Missing API key",
+            "description": "Missing credentials or invalid session",
             "content": {
               "application/json": {
                 "schema": {
@@ -591,6 +853,9 @@
         "security": [
           {
             "ApiKey": []
+          },
+          {
+            "SessionCookie": []
           }
         ]
       }
@@ -615,7 +880,7 @@
             }
           },
           "401": {
-            "description": "Missing API key",
+            "description": "Missing credentials or invalid session",
             "content": {
               "application/json": {
                 "schema": {
@@ -625,7 +890,7 @@
             }
           },
           "403": {
-            "description": "Unknown API key",
+            "description": "Forbidden",
             "content": {
               "application/json": {
                 "schema": {
@@ -668,6 +933,9 @@
         "security": [
           {
             "ApiKey": []
+          },
+          {
+            "SessionCookie": []
           }
         ],
         "parameters": [
@@ -703,7 +971,7 @@
             }
           },
           "401": {
-            "description": "Missing API key",
+            "description": "Missing credentials or invalid session",
             "content": {
               "application/json": {
                 "schema": {
@@ -713,7 +981,7 @@
             }
           },
           "403": {
-            "description": "Unknown API key",
+            "description": "Forbidden",
             "content": {
               "application/json": {
                 "schema": {
@@ -756,6 +1024,9 @@
         "security": [
           {
             "ApiKey": []
+          },
+          {
+            "SessionCookie": []
           }
         ],
         "parameters": [
@@ -786,6 +1057,60 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "LoginBody": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 320,
+            "minLength": 3,
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Password"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginBody",
+        "description": "Body of ``POST /v1/auth/login``."
+      },
+      "MeOut": {
+        "properties": {
+          "operator_id": {
+            "type": "string",
+            "title": "Operator Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "analyst",
+              "admin"
+            ],
+            "title": "Role"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "operator_id",
+          "email",
+          "role"
+        ],
+        "title": "MeOut",
+        "description": "Body of ``GET /v1/auth/me``."
       },
       "ReadyBody": {
         "properties": {
@@ -1464,7 +1789,13 @@
         "type": "apiKey",
         "in": "header",
         "name": "X-API-Key",
-        "description": "Client API key. The client name is the rate-limit identity."
+        "description": "Machine client API key. The client name is the rate-limit identity."
+      },
+      "SessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "fs_session",
+        "description": "Operator JWT session cookie (ADR-020)."
       }
     }
   }

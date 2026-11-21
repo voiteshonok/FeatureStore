@@ -6,7 +6,16 @@ from datetime import UTC, datetime
 
 from schemas import mask_pans
 
-_LOG_FIELDS = ("request_id", "client", "method", "path", "status", "latency_ms")
+_LOG_FIELDS = (
+    "request_id",
+    "client",
+    "operator_id",
+    "outcome",
+    "method",
+    "path",
+    "status",
+    "latency_ms",
+)
 
 
 class JsonFormatter(logging.Formatter):

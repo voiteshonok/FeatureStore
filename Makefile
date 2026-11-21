@@ -60,10 +60,11 @@ topics:
 		--create --if-not-exists --topic features.updates --partitions 4 --replication-factor 1 \
 		--config retention.ms=604800000
 
-# ADR-9: HMAC key for PAN hashing. Do not overwrite an existing key.
+# ADR-9 / ADR-020: HMAC and JWT secrets. Do not overwrite existing files.
 secret:
 	mkdir -p secrets
 	test -f secrets/hmac_key || openssl rand -hex 32 > secrets/hmac_key
+	test -f secrets/jwt_secret || openssl rand -hex 32 > secrets/jwt_secret
 
 lint:
 	uv run ruff check .

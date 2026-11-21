@@ -2,7 +2,7 @@
 
 import httpx
 import pytest
-from harness import mount, send
+from harness import mount, operator_headers, send
 
 from gateway.proxy import pause
 
@@ -18,11 +18,11 @@ def _failing(error: type[httpx.TransportError]) -> tuple[list[int], object]:
 
 
 @pytest.mark.parametrize(
-    ("method", "path", "detail", "attempts", "sleeps"),
+    ("method", "path", "detail", "attempts", "sleeps", "session"),
     [
-        ("GET", "/v1/alerts?status=open", "detection unavailable", 3, [0.1, 0.4]),
-        ("POST", "/v1/features", "features unavailable", 1, []),
-        ("PATCH", "/v1/alerts/not-a-uuid", "detection unavailable", 1, []),
+        ("GET", "/v1/alerts?status=open", "detection unavailable", 3, [0.1, 0.4], True),
+        ("POST", "/v1/features", "features unavailable", 1, [], False),
+        ("PATCH", "/v1/alerts/not-a-uuid", "detection unavailable", 1, [], True),
     ],
 )
 async def test_transport_failures_retry_only_get(
@@ -32,6 +32,7 @@ async def test_transport_failures_retry_only_get(
     detail: str,
     attempts: int,
     sleeps: list[float],
+    session: bool,
 ) -> None:
     recorded: list[float] = []
 
@@ -42,7 +43,15 @@ async def test_transport_failures_retry_only_get(
     calls, handler = _failing(httpx.ConnectError)
     gateway = await mount(handler)  # type: ignore[arg-type]
     try:
-        response = await send(gateway.app, method, path, content=b"{}")
+        headers = operator_headers(csrf=method == "PATCH") if session else None
+        response = await send(
+            gateway.app,
+            method,
+            path,
+            api_key=None if session else "dev-scoring-key",
+            content=b"{}",
+            headers=headers,
+        )
     finally:
         await gateway.aclose()
     assert calls["n"] == attempts
@@ -70,7 +79,13 @@ async def test_get_succeeds_on_the_second_attempt(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr("gateway.proxy.pause", fake_pause)
     gateway = await mount(handler)
     try:
-        response = await send(gateway.app, "GET", "/v1/alerts?status=open")
+        response = await send(
+            gateway.app,
+            "GET",
+            "/v1/alerts?status=open",
+            api_key=None,
+            headers=operator_headers(),
+        )
     finally:
         await gateway.aclose()
     assert calls["n"] == 2
@@ -100,8 +115,9 @@ async def test_upstream_4xx_passes_through(status: int, body: bytes) -> None:
             gateway.app,
             "PATCH",
             "/v1/alerts/not-a-uuid",
+            api_key=None,
             content=body,
-            headers={"content-type": "application/json"},
+            headers={**operator_headers(csrf=True), "content-type": "application/json"},
         )
     finally:
         await gateway.aclose()
@@ -124,7 +140,13 @@ async def test_upstream_5xx_is_not_retried(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr("gateway.proxy.pause", fake_pause)
     gateway = await mount(handler)
     try:
-        response = await send(gateway.app, "GET", "/v1/alerts?status=open")
+        response = await send(
+            gateway.app,
+            "GET",
+            "/v1/alerts?status=open",
+            api_key=None,
+            headers=operator_headers(),
+        )
     finally:
         await gateway.aclose()
     assert calls["n"] == 1
@@ -165,7 +187,13 @@ async def test_get_forwards_the_query_string() -> None:
 
     gateway = await mount(handler)
     try:
-        response = await send(gateway.app, "GET", "/v1/alerts?status=open&limit=10")
+        response = await send(
+            gateway.app,
+            "GET",
+            "/v1/alerts?status=open&limit=10",
+            api_key=None,
+            headers=operator_headers(),
+        )
     finally:
         await gateway.aclose()
     assert response.status_code == 200
@@ -182,7 +210,13 @@ async def test_timeout_maps_to_504(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("gateway.proxy.pause", fake_pause)
     gateway = await mount(handler)  # type: ignore[arg-type]
     try:
-        response = await send(gateway.app, "GET", "/v1/alerts?status=open")
+        response = await send(
+            gateway.app,
+            "GET",
+            "/v1/alerts?status=open",
+            api_key=None,
+            headers=operator_headers(),
+        )
     finally:
         await gateway.aclose()
     assert calls["n"] == 3
@@ -202,3 +236,59 @@ async def test_pause_sleeps(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("gateway.proxy.asyncio.sleep", fake_sleep)
     await pause(0.1)
     assert slept == [0.1]
+
+
+async def test_forged_operator_headers_are_stripped() -> None:
+    seen: list[httpx.Headers] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.headers)
+        return httpx.Response(200, json={"ok": True})
+
+    gateway = await mount(handler)
+    try:
+        response = await send(
+            gateway.app,
+            "PATCH",
+            "/v1/alerts/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            api_key=None,
+            content=b'{"status":"acknowledged"}',
+            headers={
+                **operator_headers(operator_id="7", role="analyst", csrf=True),
+                "X-Operator-Id": "forged",
+                "X-Operator-Role": "admin",
+                "content-type": "application/json",
+            },
+        )
+    finally:
+        await gateway.aclose()
+    assert response.status_code == 200
+    assert seen[0]["x-operator-id"] == "7"
+    assert seen[0]["x-operator-role"] == "analyst"
+
+
+async def test_api_key_does_not_forward_operator_headers() -> None:
+    seen: list[httpx.Headers] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.headers)
+        return httpx.Response(200, json={"ok": True})
+
+    gateway = await mount(handler)
+    try:
+        response = await send(
+            gateway.app,
+            "POST",
+            "/v1/features",
+            content=b"{}",
+            headers={
+                "X-Operator-Id": "forged",
+                "X-Operator-Role": "admin",
+                "content-type": "application/json",
+            },
+        )
+    finally:
+        await gateway.aclose()
+    assert response.status_code == 200
+    assert "x-operator-id" not in seen[0]
+    assert "x-operator-role" not in seen[0]

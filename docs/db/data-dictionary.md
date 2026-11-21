@@ -180,11 +180,12 @@ Normalizing it would add a table no query needs.
 
 Operator passwords exist **only** as bcrypt hashes (pgcrypto `crypt`); a CHECK on
 the hash format makes plain-text inserts impossible. `ops.operators_masked` masks
-emails for non-admin consumers (the only operator view granted to the gateway —
-data masking). `audit_log` receives a row on every alert status transition from a
-`SECURITY DEFINER` trigger: it runs as the schema owner, so no service holds a
-write grant on the audit table — the trail cannot be forged or skipped by a
-service account.
+emails for non-admin consumers (data masking). For login (ADR-020), `svc_gateway`
+has a column grant `SELECT (operator_id, email, password_hash, role)` on
+`ops.operators` and no other columns or `ops` tables. `audit_log` receives a row
+on every alert status transition from a `SECURITY DEFINER` trigger: it runs as the
+schema owner, so no service holds a write grant on the audit table — the trail
+cannot be forged or skipped by a service account.
 
 ## Integrity and transactions
 
@@ -213,7 +214,7 @@ mechanism, explicit history.
 | svc_ingestion | `ingestion`: insert/select/delete idempotency keys, execute cleanup |
 | svc_features | `features`: write registry |
 | svc_detection | `detection`: write alerts, read rules; `features`: read; `ref`: read + insert (registry upsert); `ops.audit_log`: SELECT (alert history for the dashboard) |
-| svc_gateway | read-only: open_alerts_v, alerts, alert_rules, merchants, feature registry, **operators_masked** (not operators) |
+| svc_gateway | read-only: open_alerts_v, alerts, alert_rules, merchants, feature registry, operators_masked; column SELECT `(operator_id, email, password_hash, role)` on `ops.operators` (ADR-020) |
 | svc_baseline | `baseline.transactions`: select, insert. No other schema. Not a member of `fs_read` or `fs_write`. Measurement stand, not part of the product (ADR-015) |
 | container owner | schema owner — init/migrations only, never used by services |
 

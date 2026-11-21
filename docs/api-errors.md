@@ -22,8 +22,8 @@ Upstream HTTP bodies are proxied unchanged.
 | type | status | When | Client action |
 | --- | --- | --- | --- |
 | `validation_error` | 422 | Body/query/header failed schema or business validation | Fix the named field(s) in `errors` |
-| `unauthorized` | 401 | Missing API key (or, later, missing session) | Send credentials |
-| `forbidden` | 403 | Unknown key, or role cannot mutate (viewer) | Use a permitted identity |
+| `unauthorized` | 401 | Missing credentials, invalid session, or bad login | Send API key or log in |
+| `forbidden` | 403 | Unknown key, insufficient role, or missing CSRF header | Use a permitted identity / send `X-Requested-With: fetch` |
 | `not_found` | 404 | Unknown alert id (and similar) | Stop retrying that id |
 | `invalid_transition` | 409 | Alert status change not allowed | Reload alert; choose a legal status |
 | `conflict` | 409 | Generic conflict when no narrower type applies | Retry after refresh |

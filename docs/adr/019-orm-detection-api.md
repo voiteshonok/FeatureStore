@@ -26,7 +26,7 @@ runs the Kafka consumer that inserts alerts under at-least-once redelivery
   per subject. An ORM upsert would not improve clarity and could hide the
   conflict semantics the schema already owns.
 - Operator identity for status changes comes from gateway headers
-  `X-Operator-Id` / `X-Operator-Role` (JWT cookie lands in T7.3), not from the
+  `X-Operator-Id` / `X-Operator-Role` (JWT cookie; ADR-020), not from the
   request body.
 
 ## Alternatives considered

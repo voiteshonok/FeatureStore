@@ -23,3 +23,4 @@ new ADR that supersedes the old one.
 | [017](017-redis-key-lifetime-and-event-dedup.md) | Redis key lifetime and event-level dedup | Accepted | 2026-11-21 |
 | [018](018-offline-writer-batching.md) | Offline writer batching and commit | Accepted | 2026-11-21 |
 | [019](019-orm-detection-api.md) | ORM in the detection API | Accepted | 2026-11-21 |
+| [020](020-operator-authentication.md) | Operator authentication | Accepted | 2026-11-21 |

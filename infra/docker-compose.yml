@@ -195,6 +195,44 @@ services:
         limits:
           memory: 512m
 
+  features-offline:
+    build:
+      context: ..
+      dockerfile: services/features/Dockerfile
+    command: ["python", "-m", "features.offline"]
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USER: svc_offline
+      CLICKHOUSE_PASSWORD: ${SVC_OFFLINE_PASSWORD:-svc_offline_dev}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-featurestore}
+      OFFLINE_BATCH_ROWS: ${OFFLINE_BATCH_ROWS:-5000}
+      OFFLINE_FLUSH_INTERVAL_S: ${OFFLINE_FLUSH_INTERVAL_S:-1}
+      OFFLINE_BACKOFF_S: ${OFFLINE_BACKOFF_S:-0.5}
+      OFFLINE_BACKOFF_MAX_S: ${OFFLINE_BACKOFF_MAX_S:-10}
+      METRICS_PORT: "9000"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import os; os.kill(1, 0)",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
   features-api:
     build:
       context: ..

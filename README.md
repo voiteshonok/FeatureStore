@@ -54,7 +54,7 @@ Service boundaries, contracts and the full deployment diagram: see
 | simulator | done |
 | libs/schemas (contracts) | done — event, snapshot and catalog contracts, contract tests |
 | infra (compose, Kafka, Postgres, Redis, ClickHouse) | done |
-| features | done — worker (Redis windows, watermarks, snapshots) + api (serving, ADR-013 freshness), two images (ADR-007) |
+| features | done — worker (Redis windows, watermarks, snapshots), offline-writer (ClickHouse batches, ADR-018), api (serving, ADR-013 freshness); two images, three processes (ADR-007) |
 | detection | done — rule evaluation over snapshots, alert lifecycle API, audit via DB trigger |
 | gateway | done — routing, API-key auth, rate limiting, timeouts/retries, request ids |
 | PostgreSQL OLTP (schemas, roles, seed) | done — infra/postgres, docs/db |

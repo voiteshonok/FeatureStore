@@ -14,6 +14,10 @@ scrape_configs:
     static_configs:
       - targets: ["features-worker:9000"]
 
+  - job_name: features-offline
+    static_configs:
+      - targets: ["features-offline:9000"]
+
   - job_name: features-api
     static_configs:
       - targets: ["features-api:9000"]

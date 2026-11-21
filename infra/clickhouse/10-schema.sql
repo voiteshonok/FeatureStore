@@ -46,4 +46,6 @@ ORDER BY (entity_type, entity_id, event_time, event_id);
 -- Least privilege per service account (users created in 00-users.sh).
 GRANT INSERT, SELECT ON featurestore.events TO svc_offline;
 GRANT INSERT, SELECT ON featurestore.feature_snapshots TO svc_offline;
+-- Metadata for pan_scan column discovery (string columns + mapKeys).
+GRANT SELECT ON system.columns TO svc_offline;
 GRANT SELECT ON featurestore.feature_snapshots TO svc_features_read;

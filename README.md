@@ -127,14 +127,14 @@ infra/           docker-compose, Postgres/ClickHouse init scripts
 docs/adr/        architecture decision records
 docs/criteria/   diploma evaluation criteria — ADRs with compliance checklists
 docs/db/         data dictionary, ER diagram
-tools/           pan_scan — CI guard: no PANs in code or fixtures
+tools/           pan_scan — Luhn scan of Kafka, Postgres, Redis, ClickHouse, logs
 ```
 
 ## Security notes
 
 - Raw PANs never cross the ingestion boundary: events carry an HMAC `card_token`
   (structurally enforced by the `TransactionEvent` contract), logs pass a PAN-masking
-  filter, and `make pan-scan` runs in CI.
+  filter, and `make pan-scan` checks Kafka, PostgreSQL, Redis, ClickHouse, and Compose logs.
 - No secrets in the repository: the HMAC key is a compose secret, DB credentials come
   from the environment (`infra/.env.example`).
 - Services connect to Postgres under per-service accounts with least-privilege grants

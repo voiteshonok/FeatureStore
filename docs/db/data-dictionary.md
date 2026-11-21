@@ -287,7 +287,7 @@ the latest snapshot per entity the same way.
 | Account | Rights |
 | --- | --- |
 | featurestore (CLICKHOUSE_USER) | Admin with `CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1` — init / DDL only; services never connect as this user |
-| svc_offline | `INSERT, SELECT` on `events` and `feature_snapshots` (offline-writer; SELECT for readiness and catch-up tests) |
+| svc_offline | `INSERT, SELECT` on `events` and `feature_snapshots` (offline-writer; SELECT for readiness and catch-up tests); `SELECT` on `system.columns` (pan_scan column discovery) |
 | svc_features_read | `SELECT` on `feature_snapshots` only — stage-5 Redis-down fallback |
 
 Passwords: `SVC_OFFLINE_PASSWORD`, `SVC_FEATURES_READ_PASSWORD` from

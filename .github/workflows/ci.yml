@@ -16,6 +16,10 @@ jobs:
       - run: uv sync --locked
       - run: uv run ruff check .
       - run: uv run mypy .
+      - name: pip-audit
+        run: |
+          uv export --frozen --no-dev --no-emit-workspace -o /tmp/reqs.txt
+          uvx pip-audit -r /tmp/reqs.txt
       - name: promtool
         run: |
           docker run --rm --entrypoint promtool \

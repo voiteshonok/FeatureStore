@@ -94,7 +94,8 @@ bounded retries with exponential backoff (idempotent GETs only), and a mapped
 `503`/`504` when the dependency is down (graceful degradation: the dashboard shows
 "features unavailable", partial results where possible). APIs are versioned under
 `/v1/`; OpenAPI specs are exported to [openapi/](openapi/). Contract changes are
-logged in [api-changelog.md](api-changelog.md).
+logged in [api-changelog.md](api-changelog.md). Error bodies follow a shared
+Problem Details shape — see [api-errors.md](api-errors.md).
 
 ### Correlation
 

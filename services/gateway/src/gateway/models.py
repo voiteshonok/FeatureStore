@@ -17,12 +17,29 @@ Entity = Literal["card", "merchant"]
 Comparison = Literal["gt", "ge", "lt", "le"]
 
 
-class ErrorBody(BaseModel):
-    """Error payload used by the gateway itself."""
+class FieldErrorOut(BaseModel):
+    """One validation field failure."""
 
     model_config = ConfigDict(extra="forbid")
 
-    detail: str
+    field: str
+    message: str
+
+
+class ProblemDetails(BaseModel):
+    """Gateway-owned error body (T7.2 / RFC 9457-shaped)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: str
+    title: str
+    status: int
+    request_id: str
+    errors: list[FieldErrorOut] = Field(default_factory=list)
+
+
+# Backward-compatible alias used in a few OpenAPI helpers.
+ErrorBody = ProblemDetails
 
 
 class ReadyBody(BaseModel):

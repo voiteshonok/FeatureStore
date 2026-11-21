@@ -12,7 +12,7 @@ from types import TracebackType
 
 import httpx
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import Response
 
 from gateway.metrics import GatewayMetrics
 
@@ -95,7 +95,9 @@ async def forward(
     base_url: str,
     service: str,
 ) -> Response:
-    """Send the request upstream and map transport failures to 503."""
+    """Send the request upstream; timeouts → 504, other transport errors → 503."""
+    from gateway.errors import problem_response
+
     request_id = _request_id(request)
     idempotent = request.method == "GET"
     attempts = 1 + len(_GET_BACKOFF_S) if idempotent else 1
@@ -119,11 +121,20 @@ async def forward(
         else:
             return passthrough(upstream, request_id)
     _log_failure(service, request, request_id, last_error)
-    unavailable = JSONResponse(
-        status_code=503,
-        content={"detail": f"{service} unavailable"},
+    timed_out = isinstance(last_error, httpx.TimeoutException)
+    if timed_out:
+        return problem_response(
+            request,
+            type="upstream_timeout",
+            title=f"{service} timeout",
+            status=504,
+        )
+    return problem_response(
+        request,
+        type="upstream_unavailable",
+        title=f"{service} unavailable",
+        status=503,
     )
-    return unavailable
 
 
 def _count_upstream_error(request: Request, service: str, exc: httpx.TransportError) -> None:

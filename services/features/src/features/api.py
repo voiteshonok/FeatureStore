@@ -3,7 +3,6 @@
 import asyncio
 import json
 import logging
-import re
 import time
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
@@ -13,7 +12,7 @@ from uuid import uuid4
 
 import uvicorn
 from aiokafka.admin import AIOKafkaAdminClient
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from psycopg import AsyncConnection
 from psycopg.rows import TupleRow
@@ -21,15 +20,15 @@ from psycopg_pool import AsyncConnectionPool
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
+from features.errors import install_error_handlers, install_request_id_middleware
 from features.freshness import serve
 from features.metrics import API_METRICS, ApiMetrics, start_metrics_server
 from features.settings import Settings
-from schemas import CATALOG, FeatureRequest, FeatureResponse, FeatureSpec
+from schemas import CATALOG, AppProblem, FeatureRequest, FeatureResponse, FeatureSpec, mask_pans
 
 _READY_TIMEOUT_S = 1.0
 _PORT = 8001
 _LOG_FIELDS = ("request_id", "card_token", "merchant_id", "ts", "latency_ms")
-_PAN_RUN = re.compile(r"(?<!\d)\d{13,19}(?!\d)")
 _CATALOG_VERSION = 1
 
 _UPSERT_DEFINITION = """
@@ -55,17 +54,6 @@ ON CONFLICT (name, version) DO UPDATE SET
 WHERE features.feature_versions.window_ms IS DISTINCT FROM EXCLUDED.window_ms
    OR features.feature_versions.stale_after_ms IS DISTINCT FROM EXCLUDED.stale_after_ms
 """
-
-
-def mask_pans(text: str) -> str:
-    """Mask maximal 13–19 digit runs, keeping the first 6 and last 4 digits."""
-
-    def replace(match: re.Match[str]) -> str:
-        digits = match.group(0)
-        hidden = len(digits) - 10
-        return f"{digits[:6]}{'*' * hidden}{digits[-4:]}"
-
-    return _PAN_RUN.sub(replace, text)
 
 
 def _mask_value(value: object) -> object:
@@ -275,12 +263,15 @@ def create_app(
     settings: Settings | None = None,
     *,
     metrics: ApiMetrics | None = None,
+    include_test_routes: bool = False,
 ) -> FastAPI:
     """Build the feature API. Importing this module does not open connections."""
     app = FastAPI(title="features", lifespan=_lifespan)
     app.state.settings = settings or Settings.from_env()
     app.state.metrics = API_METRICS if metrics is None else metrics
     configure_logging()
+    install_request_id_middleware(app)
+    install_error_handlers(app)
 
     @app.get("/health")
     async def health() -> dict[str, str]:
@@ -312,12 +303,22 @@ def create_app(
         except RedisError:
             metrics.request_duration.labels(outcome="error").observe(time.perf_counter() - started)
             _log_request(body, request_id, started)
-            raise HTTPException(status_code=503, detail="redis unavailable") from None
+            raise AppProblem(
+                "upstream_unavailable",
+                "redis unavailable",
+                503,
+            ) from None
         for name, value in features.items():
             metrics.values.labels(feature=name, status=value.status.value).inc()
         metrics.request_duration.labels(outcome="ok").observe(time.perf_counter() - started)
         _log_request(body, request_id, started)
         return FeatureResponse(request_id=request_id, features=features)
+
+    if include_test_routes:
+
+        @app.get("/__test__/boom")
+        async def boom() -> None:
+            raise RuntimeError("boom pan 4111111111111111")
 
     return app
 

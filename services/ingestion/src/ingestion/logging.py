@@ -2,22 +2,12 @@
 
 import json
 import logging
-import re
 from collections.abc import Mapping
 from datetime import UTC, datetime
 
-_PAN_RUN = re.compile(r"(?<!\d)\d{13,19}(?!\d)")
+from schemas import mask_pans
 
-
-def mask_pans(text: str) -> str:
-    """Mask maximal 13–19 digit runs, keeping the first 6 and last 4 digits."""
-
-    def replace(match: re.Match[str]) -> str:
-        digits = match.group(0)
-        hidden = len(digits) - 10
-        return f"{digits[:6]}{'*' * hidden}{digits[-4:]}"
-
-    return _PAN_RUN.sub(replace, text)
+__all__ = ["JsonFormatter", "PanMaskFilter", "mask_pans"]
 
 
 def _mask_value(value: object) -> object:
@@ -61,4 +51,8 @@ class JsonFormatter(logging.Formatter):
         }
         if record.exc_info:
             payload["exception"] = mask_pans(self.formatException(record.exc_info))
+        for key in ("request_id", "event_id"):
+            value = getattr(record, key, None)
+            if isinstance(value, str) and value:
+                payload[key] = value
         return json.dumps(payload, ensure_ascii=False)

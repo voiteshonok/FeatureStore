@@ -26,6 +26,7 @@ from detection.api.alerts import router as alerts_router
 from detection.api.rules import router as rules_router
 from detection.consumer import DetectionConsumer, configure_logging
 from detection.db import make_engine, make_session_factory
+from detection.errors import install_error_handlers, install_request_id_middleware
 from detection.metrics import METRICS, DetectionMetrics, start_metrics_server
 from detection.rules import RuleCache
 from detection.settings import Settings
@@ -88,11 +89,14 @@ def create_app(
     settings: Settings | None = None,
     *,
     metrics: DetectionMetrics | None = None,
+    include_test_routes: bool = False,
 ) -> FastAPI:
     """Build the detection API. Importing this module does not open connections."""
     application = FastAPI(title="detection", lifespan=_lifespan)
     application.state.settings = settings or Settings.from_env()
     application.state.metrics = METRICS if metrics is None else metrics
+    install_request_id_middleware(application)
+    install_error_handlers(application)
 
     @application.get("/health")
     async def health() -> dict[str, str]:
@@ -117,6 +121,17 @@ def create_app(
 
     application.include_router(alerts_router)
     application.include_router(rules_router)
+
+    if include_test_routes:
+
+        @application.get("/__test__/boom")
+        async def boom() -> None:
+            raise RuntimeError("boom pan 4111111111111111")
+
+        @application.get("/__test__/probe")
+        async def probe(value: int) -> dict[str, int]:
+            return {"value": value}
+
     return application
 
 

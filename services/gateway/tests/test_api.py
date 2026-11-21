@@ -100,9 +100,12 @@ async def test_missing_key_is_401_and_unknown_key_is_403() -> None:
         await gateway.aclose()
 
     assert missing.status_code == 401
-    assert missing.json() == {"detail": "missing api key"}
+    assert missing.json()["type"] == "unauthorized"
+    assert missing.json()["title"] == "missing api key"
+    assert "request_id" in missing.json()
     assert unknown.status_code == 403
-    assert unknown.json() == {"detail": "unknown api key"}
+    assert unknown.json()["type"] == "forbidden"
+    assert unknown.json()["title"] == "unknown api key"
     assert allowed.status_code == 200
     assert len(calls) == 1
     assert "x-api-key" not in {key.lower() for key in calls[0].headers}
@@ -188,7 +191,10 @@ async def test_rate_limit_is_shared_across_routes_and_per_client() -> None:
     assert features.status_code == 200
     assert alerts.status_code == 200
     assert blocked.status_code == 429
-    assert blocked.json() == {"detail": "rate limit exceeded"}
+    assert blocked.json()["type"] == "rate_limited"
+    assert blocked.json()["title"] == "rate limit exceeded"
+    assert blocked.json()["status"] == 429
+    assert "request_id" in blocked.json()
     retry_after = blocked.headers["retry-after"]
     assert int(retry_after) >= 0
     assert other.status_code == 200
@@ -276,6 +282,7 @@ def test_openapi_documents_the_business_routes(tmp_path: Path) -> None:
     assert "get" in document["paths"]["/v1/alerts/{alert_id}"]
     assert "/v1/rules" in document["paths"]
     assert "AlertListOut" in document["components"]["schemas"]
+    assert "ProblemDetails" in document["components"]["schemas"]
     assert "/v1/catalog" in document["paths"]
     assert "/health" in document["paths"]
     assert "security" not in document["paths"]["/health"]["get"]

@@ -90,4 +90,7 @@ async def test_catalog_failure_is_503() -> None:
     finally:
         await gateway.aclose()
     assert response.status_code == 503
-    assert response.json() == {"detail": "catalog unavailable"}
+    assert response.json()["type"] == "upstream_unavailable"
+    assert response.json()["title"] == "catalog unavailable"
+    assert response.json()["status"] == 503
+    assert "request_id" in response.json()

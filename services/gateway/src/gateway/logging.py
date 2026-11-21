@@ -4,6 +4,8 @@ import json
 import logging
 from datetime import UTC, datetime
 
+from schemas import mask_pans
+
 _LOG_FIELDS = ("request_id", "client", "method", "path", "status", "latency_ms")
 
 
@@ -15,13 +17,13 @@ class JsonFormatter(logging.Formatter):
             "timestamp": datetime.fromtimestamp(record.created, UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
-            "message": record.getMessage(),
+            "message": mask_pans(record.getMessage()),
         }
         for key in _LOG_FIELDS:
             if hasattr(record, key):
                 payload[key] = getattr(record, key)
         if record.exc_info:
-            payload["exception"] = self.formatException(record.exc_info)
+            payload["exception"] = mask_pans(self.formatException(record.exc_info))
         return json.dumps(payload, ensure_ascii=False)
 
 

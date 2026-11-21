@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 
 from detection.api.deps import (
     OperatorRole,
@@ -31,6 +31,7 @@ from detection.services.alerts import (
     NoteRequiredError,
 )
 from detection.services.cursor import CursorError
+from schemas import AppProblem
 
 router = APIRouter(prefix="/v1", tags=["alerts"])
 
@@ -66,7 +67,7 @@ async def list_alerts(
             limit=limit,
         )
     except CursorError as exc:
-        raise HTTPException(status_code=422, detail="invalid cursor") from exc
+        raise AppProblem("validation_error", "invalid cursor", 422) from exc
     return AlertListOut(
         items=[alert_out(item) for item in page.items],
         next_cursor=page.next_cursor,
@@ -85,7 +86,7 @@ async def get_alert(
     try:
         detail = await service.get_detail(alert_id)
     except AlertNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="alert not found") from exc
+        raise AppProblem("not_found", "alert not found", 404) from exc
     return detail_out(detail)
 
 
@@ -115,14 +116,19 @@ async def patch_alert(
             role=role,
         )
     except ForbiddenTransitionError as exc:
-        raise HTTPException(status_code=403, detail="viewer cannot change alert status") from exc
+        raise AppProblem(
+            "forbidden",
+            "viewer cannot change alert status",
+            403,
+        ) from exc
     except AlertNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="alert not found") from exc
+        raise AppProblem("not_found", "alert not found", 404) from exc
     except InvalidTransitionError as exc:
-        raise HTTPException(status_code=409, detail="invalid transition") from exc
+        raise AppProblem("invalid_transition", "invalid transition", 409) from exc
     except NoteRequiredError as exc:
-        raise HTTPException(
-            status_code=422,
-            detail="note is required when resolving (3–500 characters)",
+        raise AppProblem(
+            "validation_error",
+            "note is required when resolving (3–500 characters)",
+            422,
         ) from exc
     return alert_out(alert)

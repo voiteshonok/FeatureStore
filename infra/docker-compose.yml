@@ -59,16 +59,18 @@ services:
   clickhouse:
     image: clickhouse/clickhouse-server:25.3
     ports:
-      - "8123:8123"
-      - "9000:9000"
+      - "127.0.0.1:8123:8123"
+      - "127.0.0.1:9000:9000"
     environment:
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-featurestore}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-featurestore}
       CLICKHOUSE_DB: ${CLICKHOUSE_DB:-featurestore}
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+      SVC_OFFLINE_PASSWORD: ${SVC_OFFLINE_PASSWORD:-svc_offline_dev}
+      SVC_FEATURES_READ_PASSWORD: ${SVC_FEATURES_READ_PASSWORD:-svc_features_read_dev}
     volumes:
       - clickhouse-data:/var/lib/clickhouse
-      - ./clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./clickhouse:/docker-entrypoint-initdb.d:ro
     ulimits:
       nofile:
         soft: 262144

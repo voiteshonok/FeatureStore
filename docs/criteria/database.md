@@ -53,8 +53,10 @@ startup upsert keeps them consistent and versions accumulate as history.
 
 ## Implementation
 
-- Roles (env-based passwords): `infra/postgres/00-roles.sh`
-- DDL: `infra/postgres/10-schema.sql` · Seed: `infra/postgres/20-seed.sql`
+- Roles (env-based passwords): `infra/postgres/00-roles.sh`; ClickHouse
+  service users: `infra/clickhouse/00-users.sh`
+- DDL: `infra/postgres/10-schema.sql` · Seed: `infra/postgres/20-seed.sql`;
+  ClickHouse offline DDL + grants: `infra/clickhouse/10-schema.sql`
 - Baseline stand (not a product schema): `infra/postgres/30-baseline.sql`, role `svc_baseline`
 - Data dictionary, ER diagram, integrity, versioning:
   [`docs/db/data-dictionary.md`](../db/data-dictionary.md)
@@ -75,7 +77,7 @@ startup upsert keeps them consistent and versions accumulate as history.
 | 7 | PK/FK, CHECKs, meaningful types everywhere | ✅ | 10-schema.sql (incl. XOR subject check, status⇔resolved_at) |
 | 8 | Structure only via scripts, versioned in Git | ✅ | infra/postgres/, reviewed PRs |
 | 9 | Test data incl. edge cases; reference fill scripts | ✅ | 20-seed.sql; seeded simulator (bursts, declines, geo) as the stream generator |
-| 10 | Roles read/write/admin; app not under superuser | ✅ | 00-roles.sh (fs_* tiers, svc_* accounts), grants in 10-schema.sql |
+| 10 | Roles read/write/admin; app not under superuser | ✅ | Postgres: 00-roles.sh (fs_* tiers, svc_* accounts), grants in 10-schema.sql; ClickHouse: 00-users.sh (svc_offline, svc_features_read), grants in clickhouse/10-schema.sql |
 | 11 | Permissions kept in review when objects change | ✅ | Grants live in the same reviewed scripts |
 | 12 | Passwords only hashed, modern algorithm | ✅ | bcrypt (pgcrypto); format CHECK rejects plain text |
 | 13 | No CSV-as-storage / unjustified JSON | ✅ | Single jsonb column, justified in data-dictionary.md |

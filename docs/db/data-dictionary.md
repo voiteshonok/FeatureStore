@@ -216,3 +216,79 @@ mechanism, explicit history.
 
 Role passwords come from the environment (`infra/.env`, from `.env.example`);
 nothing is committed — per the submission rules.
+
+## ClickHouse (offline store)
+
+DBMS: **ClickHouse 25.3** — append-heavy offline history (ADR-004). Structure is
+created exclusively by the scripts in
+[`infra/clickhouse/`](../../infra/clickhouse/) — `00-users.sh` (service users;
+passwords from the environment) → `10-schema.sql` (tables + grants) — mounted
+into `/docker-entrypoint-initdb.d` and executed once when the ClickHouse volume
+is created. Host ports `8123` / `9000` bind only to `127.0.0.1`.
+
+### Tables
+
+#### featurestore.events
+
+Raw `transactions.raw` history written by the offline-writer. One row per
+accepted event; Kafka redelivery of the same `event_id` collapses under
+`ReplacingMergeTree`.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| schema_version | UInt8 | Event contract version |
+| event_id | UUID | Dedup key (with sort key) |
+| payment_id, merchant_id, card_token | String | Business identifiers; `card_token` is HMAC (ADR-009) |
+| amount_minor | Int64 | Minor currency units |
+| currency | LowCardinality(String) | |
+| status | Enum8 approved/declined | |
+| event_time, ingest_time | DateTime64(3, 'UTC') | Event vs accept time |
+| lat, lon | Nullable(Float64) | Optional geo |
+| kafka_partition, kafka_offset | UInt32 / UInt64 | Source position |
+| written_at | DateTime64(3, 'UTC') DEFAULT now64(3) | Server receipt time; offline-copy lag |
+
+- **ENGINE:** `ReplacingMergeTree`
+- **PARTITION BY** `toDate(event_time)` — day partitions so old history can be
+  dropped without a table-wide rewrite (TTL is not used at experiment scale,
+  ADR-004)
+- **ORDER BY** `(card_token, event_time, event_id)` — card-scoped time series for
+  window/parity SQL; `event_id` makes the ReplacingMergeTree identity unique per
+  event so a redelivery replaces rather than duplicates
+
+#### featurestore.feature_snapshots
+
+Feature values after each event (from `features.updates`), for Redis-down
+fallback (stage 5) and point-in-time training export (ADR-004).
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| entity_type | Enum8 card/merchant | |
+| entity_id | String | Card token or merchant id |
+| event_id | UUID | Triggering event |
+| event_time, ingest_time | DateTime64(3, 'UTC') | |
+| features | Map(LowCardinality(String), Float64) | Stream feature name → value |
+| written_at | DateTime64(3, 'UTC') DEFAULT now64(3) | Offline-copy lag |
+
+- **ENGINE:** `ReplacingMergeTree`
+- **PARTITION BY** `toDate(event_time)` — same day partitioning as `events`
+- **ORDER BY** `(entity_type, entity_id, event_time, event_id)` — entity time
+  series for `argMax` / `ASOF JOIN`; `event_id` is the merge identity
+
+### ReplacingMergeTree and FINAL
+
+Background merges eventually keep one row per sort key. Until a merge runs,
+duplicates from at-least-once Kafka delivery can coexist. Queries that need an
+exact single row use `FINAL` or an aggregate such as `argMax(..., event_time)`.
+Parity and training paths prefer explicit aggregates; serving fallback will use
+the latest snapshot per entity the same way.
+
+### Users and access
+
+| Account | Rights |
+| --- | --- |
+| featurestore (CLICKHOUSE_USER) | Admin with `CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1` — init / DDL only; services never connect as this user |
+| svc_offline | `INSERT, SELECT` on `events` and `feature_snapshots` (offline-writer; SELECT for readiness and catch-up tests) |
+| svc_features_read | `SELECT` on `feature_snapshots` only — stage-5 Redis-down fallback |
+
+Passwords: `SVC_OFFLINE_PASSWORD`, `SVC_FEATURES_READ_PASSWORD` from
+`infra/.env` (dev defaults in `.env.example` only).

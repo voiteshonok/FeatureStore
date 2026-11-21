@@ -19,7 +19,9 @@ token), and the system runs on one server without external services.
   window history. This is a documented limitation.
 - The ingestion logger has a filter that masks any run of 13–19 digits.
 - Tests: one card gives one token; different cards give different tokens; the PAN
-  scanner finds 0 PANs in stores and logs (Luhn-checked to avoid false positives).
+  scanner finds 0 PANs in Kafka, PostgreSQL, Redis, ClickHouse, and Compose logs
+  (Luhn-checked; Redis skips known epoch fields so scores/`as_of_ms`/`geo` time
+  do not false-positive).
 
 ## Alternatives considered
 

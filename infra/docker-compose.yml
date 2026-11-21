@@ -59,16 +59,18 @@ services:
   clickhouse:
     image: clickhouse/clickhouse-server:25.3
     ports:
-      - "8123:8123"
-      - "9000:9000"
+      - "127.0.0.1:8123:8123"
+      - "127.0.0.1:9000:9000"
     environment:
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-featurestore}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-featurestore}
       CLICKHOUSE_DB: ${CLICKHOUSE_DB:-featurestore}
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+      SVC_OFFLINE_PASSWORD: ${SVC_OFFLINE_PASSWORD:-svc_offline_dev}
+      SVC_FEATURES_READ_PASSWORD: ${SVC_FEATURES_READ_PASSWORD:-svc_features_read_dev}
     volumes:
       - clickhouse-data:/var/lib/clickhouse
-      - ./clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./clickhouse:/docker-entrypoint-initdb.d:ro
     ulimits:
       nofile:
         soft: 262144
@@ -175,6 +177,44 @@ services:
       kafka:
         condition: service_healthy
       redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import os; os.kill(1, 0)",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  features-offline:
+    build:
+      context: ..
+      dockerfile: services/features/Dockerfile
+    command: ["python", "-m", "features.offline"]
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USER: svc_offline
+      CLICKHOUSE_PASSWORD: ${SVC_OFFLINE_PASSWORD:-svc_offline_dev}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-featurestore}
+      OFFLINE_BATCH_ROWS: ${OFFLINE_BATCH_ROWS:-5000}
+      OFFLINE_FLUSH_INTERVAL_S: ${OFFLINE_FLUSH_INTERVAL_S:-1}
+      OFFLINE_BACKOFF_S: ${OFFLINE_BACKOFF_S:-0.5}
+      OFFLINE_BACKOFF_MAX_S: ${OFFLINE_BACKOFF_MAX_S:-10}
+      METRICS_PORT: "9000"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      clickhouse:
         condition: service_healthy
     healthcheck:
       test:

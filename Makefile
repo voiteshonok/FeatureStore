@@ -9,7 +9,7 @@ KAFKA_TOPICS := /opt/kafka/bin/kafka-topics.sh
 up:
 	$(COMPOSE) up -d --wait kafka postgres redis clickhouse
 	$(MAKE) topics
-	$(COMPOSE) up -d --wait ingestion features-worker features-api detection gateway
+	$(COMPOSE) up -d --wait ingestion features-worker features-offline features-api detection gateway
 
 obs-up:
 	$(COMPOSE) --profile obs up -d --wait prometheus

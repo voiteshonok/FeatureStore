@@ -54,7 +54,7 @@ Service boundaries, contracts and the full deployment diagram: see
 | simulator | done |
 | libs/schemas (contracts) | done — event, snapshot and catalog contracts, contract tests |
 | infra (compose, Kafka, Postgres, Redis, ClickHouse) | done |
-| features | done — worker (Redis windows, watermarks, snapshots) + api (serving, ADR-013 freshness), two images (ADR-007) |
+| features | done — worker (Redis windows, watermarks, snapshots), offline-writer (ClickHouse batches, ADR-018), api (serving, ADR-013 freshness); two images, three processes (ADR-007) |
 | detection | done — rule evaluation over snapshots, alert lifecycle API, audit via DB trigger |
 | gateway | done — routing, API-key auth, rate limiting, timeouts/retries, request ids |
 | PostgreSQL OLTP (schemas, roles, seed) | done — infra/postgres, docs/db |
@@ -127,14 +127,14 @@ infra/           docker-compose, Postgres/ClickHouse init scripts
 docs/adr/        architecture decision records
 docs/criteria/   diploma evaluation criteria — ADRs with compliance checklists
 docs/db/         data dictionary, ER diagram
-tools/           pan_scan — CI guard: no PANs in code or fixtures
+tools/           pan_scan — Luhn scan of Kafka, Postgres, Redis, ClickHouse, logs
 ```
 
 ## Security notes
 
 - Raw PANs never cross the ingestion boundary: events carry an HMAC `card_token`
   (structurally enforced by the `TransactionEvent` contract), logs pass a PAN-masking
-  filter, and `make pan-scan` runs in CI.
+  filter, and `make pan-scan` checks Kafka, PostgreSQL, Redis, ClickHouse, and Compose logs.
 - No secrets in the repository: the HMAC key is a compose secret, DB credentials come
   from the environment (`infra/.env.example`).
 - Services connect to Postgres under per-service accounts with least-privilege grants

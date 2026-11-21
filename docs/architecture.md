@@ -9,7 +9,7 @@ Database evaluation criteria; decisions are recorded in [ADRs](adr/README.md).
 | Service | Bounded context | Owns (data) | Why a separate service |
 | --- | --- | --- | --- |
 | **ingestion** | Event acceptance: validation, PAN tokenization, deduplication, publish | `ingestion` schema (idempotency keys) | Security boundary — the only component that ever sees a PAN; must absorb client bursts and broker outages (ADR-006) independently of the read path |
-| **features** | Feature computation and serving: sliding windows, online store, offline copy | Redis keys, ClickHouse tables, `features` schema (registry) | Latency-critical read path (P99 ms-level); scales with read traffic, not with ingest; independent online/offline writers (ADR-001). One package, two images — `worker` (consumers) and `api` (serving) — so consumer load never touches API latency (ADR-007) |
+| **features** | Feature computation and serving: sliding windows, online store, offline copy | Redis keys, ClickHouse tables, `features` schema (registry) | Latency-critical read path (P99 ms-level); scales with read traffic, not with ingest; independent online/offline writers (ADR-001, ADR-018). One package, two images — `worker` (online + offline consumers as separate processes) and `api` (serving) — so consumer load never touches API latency (ADR-007) |
 | **detection** | Anomaly detection: rule evaluation, alert lifecycle | `detection` schema (rules, alerts) | Evolves independently (rules → ML model later); failure must not affect feature serving |
 | **gateway** | Edge: routing, authn, rate limiting | — (stateless) | Single entry point; keeps cross-cutting edge concerns out of business services (ADR-008) |
 | simulator | Load generation (dev/test only) | — | Reproducible traffic for demos and experiments |
@@ -38,7 +38,8 @@ flowchart TB
     subgraph core [Business services]
         ING["ingestion<br/>:8000"]
         subgraph feat [features — ADR-007]
-            FW["worker<br/>(consumers)"]
+            FW["worker<br/>online-writer"]
+            FO["offline-writer"]
             FA["api<br/>:8001"]
         end
         DET["detection<br/>:8002"]
@@ -55,12 +56,14 @@ flowchart TB
     GW -->|"REST, timeout+retry"| DET
     ING -->|"produce: transactions.raw"| K
     K -->|"consume: transactions.raw"| FW
+    K -->|"consume: transactions.raw"| FO
     FW -->|"produce: features.updates<br/>(FeatureSnapshot)"| K
     K -->|"consume: features.updates"| DET
+    K -->|"consume: features.updates"| FO
     ING --- PG
     FW --- R
     FA --- R
-    FW -.->|"offline copy (stage 4)"| CH
+    FO -->|"offline copy"| CH
     FA --- PG
     DET --- PG
 ```
@@ -72,7 +75,7 @@ flowchart TB
 | Topic | Producer | Consumers | Contract | Retention |
 | --- | --- | --- | --- | --- |
 | `transactions.raw` | ingestion | features (online + offline writers, independent consumer groups — ADR-001) | `schemas.events.TransactionEvent` v1 | unlimited (replay) |
-| `features.updates` | features worker | detection, dashboard push | `schemas.snapshots.FeatureSnapshot` v1 | 7 days |
+| `features.updates` | features worker (online) | detection, offline-writer, dashboard push | `schemas.snapshots.FeatureSnapshot` v1 | 7 days |
 
 Serving freshness (`as_of`, `age_ms`, fresh/stale/default) is defined by partition
 watermarks and writer heartbeats — ADR-013.
@@ -109,6 +112,7 @@ flowchart TB
             GW[gateway :8080→8080]
             ING[ingestion :8000→8000]
             FW[features-worker]
+            FO[features-offline]
             FA[features-api :8001→8001]
             DET[detection :8002→8002]
             PROM["prometheus :9090"]
@@ -121,6 +125,7 @@ flowchart TB
         ENV[/.env: DB passwords/] -.-> PG & ING & FEAT & DET & GW
         ING -.->|"scrape :9000"| PROM
         FW -.->|"scrape :9000"| PROM
+        FO -.->|"scrape :9000"| PROM
         FA -.->|"scrape :9000"| PROM
         DET -.->|"scrape :9000"| PROM
         GW -.->|"scrape :9000"| PROM
@@ -143,6 +148,7 @@ flowchart TB
 | --- | --- |
 | Kafka down | ingestion: `503 + Retry-After` to clients, no data loss accepted silently (ADR-006); consumers resume from committed offsets |
 | Redis down | features-api not ready (503); worker pauses without committing offsets and rebuilds windows from Kafka replay (ADR-002/003). Serving `fallback` from the offline store is the stage-5 path (ADR-013) |
+| ClickHouse down | offline-writer keeps one batch in memory, retries insert with backoff, does not commit offsets; lag accumulates in Kafka. Online Redis path is unaffected (ADR-001, ADR-018). Evidence: `services/features/tests/test_offline_recovery.py`, `tests/e2e/test_stage4_offline.py` |
 | Postgres down | ingestion not ready (`/ready` 503); detection buffers via consumer lag |
 | features down | gateway returns degraded response after timeout; detection lags, catches up from topic |
 | duplicate/replayed events | idempotency store at ingestion; idempotent handlers downstream (ADR-003) |

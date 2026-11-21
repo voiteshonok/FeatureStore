@@ -65,7 +65,7 @@ service.
 | 11 | Handling of unavailable dependencies | ✅ | ingestion: 503+Retry-After on Kafka outage (ADR-006, tested); gateway: upstream down → 503, no hang; worker pauses without committing offsets on Redis outage |
 | 12 | Rate limiting at the entry point | ✅ | gateway: slowapi per API key (`GATEWAY_RATE_LIMIT`), 429 + Retry-After |
 | 13 | Own codebase per service (monorepo ok) | ✅ | services/* as uv workspace packages |
-| 14 | Separate Docker image per service | ✅ | 5 images: ingestion, features worker + api (Dockerfile, Dockerfile.api — ADR-007), detection, gateway |
+| 14 | Separate Docker image per service | ✅ | 5 images / 6 compose processes: ingestion, features worker + features-offline (same worker image, ADR-007/018) + api (Dockerfile.api), detection, gateway |
 | 15 | Own DB / isolated schema per service | ✅ | infra/postgres: schemas + svc_* accounts, least-privilege grants |
 | 16 | Health/ready endpoints | ✅ | `/health` + `/ready` with per-dependency probes in every service; compose healthchecks gate startup |
 | 17 | Correlation-id logging | ✅ | `event_id` carried end-to-end (event → snapshot → alert); `X-Request-ID` at the gateway; single-line JSON logs, PAN-masked |

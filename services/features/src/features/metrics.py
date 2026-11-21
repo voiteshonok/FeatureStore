@@ -1,6 +1,6 @@
-"""Prometheus series for the feature API and the online writer.
+"""Prometheus series for the feature API and the online / offline writers.
 
-The two processes do not share a registry. Each scrape shows only the series
+The processes do not share a registry. Each scrape shows only the series
 that process records (ADR-014).
 """
 
@@ -104,8 +104,55 @@ def worker_metrics(registry: CollectorRegistry | None = None) -> WorkerMetrics:
     return WorkerMetrics(CollectorRegistry() if registry is None else registry)
 
 
+class OfflineMetrics:
+    """Offline-writer series (ADR-018)."""
+
+    def __init__(self, registry: CollectorRegistry) -> None:
+        self.registry = registry
+        self.rows_written = Counter(
+            "offline_rows_written_total",
+            "Rows inserted into ClickHouse by the offline writer.",
+            labelnames=("table",),
+            registry=registry,
+        )
+        self.flush_duration = Histogram(
+            "offline_flush_duration_seconds",
+            "Time to insert one offline batch into ClickHouse.",
+            registry=registry,
+        )
+        self.flush_failures = Counter(
+            "offline_flush_failures_total",
+            "Failed offline flush attempts before a successful insert.",
+            registry=registry,
+        )
+        self.consumer_lag = Gauge(
+            "offline_consumer_lag",
+            "Records between the log end and the offline consumer position.",
+            labelnames=("topic", "partition"),
+            registry=registry,
+        )
+        self.event_to_store = Histogram(
+            "offline_event_to_store_seconds",
+            "Time from ingest_time to a successful offline flush.",
+            buckets=FRESHNESS_BUCKETS_S,
+            registry=registry,
+        )
+        self.records = Counter(
+            "offline_records_total",
+            "Records handled by the offline writer.",
+            labelnames=("outcome",),
+            registry=registry,
+        )
+
+
+def offline_metrics(registry: CollectorRegistry | None = None) -> OfflineMetrics:
+    """Build offline-writer series on ``registry``, or on a fresh one."""
+    return OfflineMetrics(CollectorRegistry() if registry is None else registry)
+
+
 API_METRICS = api_metrics()
 WORKER_METRICS = worker_metrics()
+OFFLINE_METRICS = offline_metrics()
 
 
 def start_metrics_server(port: int, registry: CollectorRegistry) -> None:

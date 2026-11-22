@@ -1,9 +1,15 @@
-"""Stream event schema round-trips (ADR-021)."""
+"""Stream event schema round-trips (ADR-021, ADR-022)."""
 
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from schemas import AlertStreamEvent, ResetStreamEvent, StatsStreamEvent
+from schemas import (
+    AlertStreamEvent,
+    ComponentState,
+    ResetStreamEvent,
+    StatsStreamEvent,
+    SystemStreamEvent,
+)
 
 
 def test_alert_stream_event_roundtrip() -> None:
@@ -33,3 +39,21 @@ def test_stats_and_reset() -> None:
     )
     assert StatsStreamEvent.model_validate(stats.model_dump()) == stats
     assert ResetStreamEvent(reason="reconnect").reason == "reconnect"
+
+
+def test_system_stream_event_roundtrip() -> None:
+    now = datetime.now(UTC)
+    event = SystemStreamEvent(
+        mode="degraded",
+        components=[
+            ComponentState(name="Redis", status="down", checked_at=now, lag=None),
+            ComponentState(
+                name="features-worker",
+                status="up",
+                checked_at=now,
+                lag=42,
+            ),
+        ],
+    )
+    restored = SystemStreamEvent.model_validate_json(event.model_dump_json())
+    assert restored == event

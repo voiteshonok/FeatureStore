@@ -1,0 +1,58 @@
+asyncapi: 3.0.0
+info:
+  title: FeatureStore system state stream
+  version: 0.1.0
+  description: |
+    Server-Sent Events on GET /v1/stream/system (ADR-022).
+    OpenAPI does not describe this stream; schemas match libs/schemas.stream.
+channels:
+  streamSystem:
+    address: /v1/stream/system
+    messages:
+      snapshot:
+        name: snapshot
+        payload:
+          $ref: "#/components/schemas/SystemStreamEvent"
+      change:
+        name: change
+        payload:
+          $ref: "#/components/schemas/SystemStreamEvent"
+operations:
+  receiveSystemStream:
+    action: receive
+    channel:
+      $ref: "#/channels/streamSystem"
+components:
+  schemas:
+    SystemStreamEvent:
+      type: object
+      additionalProperties: false
+      required: [mode, components]
+      properties:
+        mode: {enum: [normal, degraded, fallback]}
+        components:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComponentState"
+    ComponentState:
+      type: object
+      additionalProperties: false
+      required: [name, status, checked_at]
+      properties:
+        name:
+          enum:
+            [
+              ingestion,
+              features-worker,
+              features-offline,
+              features-api,
+              detection,
+              gateway,
+              Kafka,
+              Redis,
+              PostgreSQL,
+              ClickHouse,
+            ]
+        status: {enum: [up, down, unknown]}
+        checked_at: {type: string, format: date-time}
+        lag: {type: integer, nullable: true}

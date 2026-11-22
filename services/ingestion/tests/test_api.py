@@ -200,7 +200,7 @@ async def test_ready_reflects_postgres_and_kafka() -> None:
     async with _client(healthy) as client:
         response = await client.get("/ready")
     assert response.status_code == 200
-    assert response.json() == {"status": "ready"}
+    assert response.json() == {"status": "ready", "kafka": "ok", "postgres": "ok"}
 
     database_down = _application(
         _Store(AcceptResult.ACCEPTED),
@@ -210,11 +210,13 @@ async def test_ready_reflects_postgres_and_kafka() -> None:
     async with _client(database_down) as client:
         response = await client.get("/ready")
     assert response.status_code == 503
+    assert response.json() == {"status": "not_ready", "kafka": "ok", "postgres": "down"}
 
     kafka_down = _application(_Store(AcceptResult.ACCEPTED), _Publisher(ready=False))
     async with _client(kafka_down) as client:
         response = await client.get("/ready")
     assert response.status_code == 503
+    assert response.json() == {"status": "not_ready", "kafka": "down", "postgres": "ok"}
 
 
 async def test_cleanup_loop_runs_after_the_interval() -> None:

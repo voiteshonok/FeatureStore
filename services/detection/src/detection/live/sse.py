@@ -17,20 +17,31 @@ async def sse_frames(
     *,
     last_event_id: int | None,
 ) -> AsyncIterator[bytes]:
-    """Yield SSE bytes: retry, then events, with ping comments every 15 s."""
+    """Yield SSE bytes: retry, then events, with ping comments every 15 s.
+
+    ``wait_for`` must not cancel ``anext`` on timeout — that would close the
+    subscriber generator after a quiet period.
+    """
     yield f"retry: {_RETRY_MS}\n\n".encode()
     stream = hub.subscribe(last_event_id)
+    pending: asyncio.Task[StreamMessage] = asyncio.create_task(anext(stream))
     try:
         while True:
             try:
-                message = await asyncio.wait_for(anext(stream), timeout=_PING_S)
+                message = await asyncio.wait_for(asyncio.shield(pending), timeout=_PING_S)
             except TimeoutError:
                 yield b": ping\n\n"
                 continue
             except StopAsyncIteration:
                 return
             yield _encode(message)
+            pending = asyncio.create_task(anext(stream))
     finally:
+        pending.cancel()
+        try:
+            await pending
+        except (asyncio.CancelledError, StopAsyncIteration):
+            pass
         await stream.aclose()
 
 

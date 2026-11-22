@@ -25,6 +25,7 @@ _OPERATOR_GET = frozenset(
         ("GET", "/v1/rules"),
         ("GET", "/v1/catalog"),
         ("GET", "/v1/stream/alerts"),
+        ("GET", "/v1/stream/system"),
     }
 )
 _AUTH_SESSION = frozenset(

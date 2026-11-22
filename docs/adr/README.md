@@ -25,3 +25,4 @@ new ADR that supersedes the old one.
 | [019](019-orm-detection-api.md) | ORM in the detection API | Accepted | 2026-11-21 |
 | [020](020-operator-authentication.md) | Operator authentication | Accepted | 2026-11-21 |
 | [021](021-live-stream-dashboard.md) | Live stream for the dashboard | Accepted | 2026-11-21 |
+| [022](022-system-state-stream.md) | System state stream for the dashboard | Accepted | 2026-11-21 |

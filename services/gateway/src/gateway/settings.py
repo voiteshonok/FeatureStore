@@ -10,6 +10,8 @@ from limits import parse_many
 
 _DEFAULT_FEATURES_URL = "http://localhost:8001"
 _DEFAULT_DETECTION_URL = "http://localhost:8002"
+_DEFAULT_INGESTION_URL = "http://localhost:8000"
+_DEFAULT_PROMETHEUS_URL = "http://localhost:9090"
 _DEFAULT_DATABASE_URL = "postgresql://svc_gateway:svc_gateway_dev@localhost:5432/featurestore"
 _DEFAULT_RATE_LIMIT = "100/second"
 
@@ -64,6 +66,8 @@ class Settings:
     rate_limit: str = _DEFAULT_RATE_LIMIT
     features_url: str = _DEFAULT_FEATURES_URL
     detection_url: str = _DEFAULT_DETECTION_URL
+    ingestion_url: str = _DEFAULT_INGESTION_URL
+    prometheus_url: str = _DEFAULT_PROMETHEUS_URL
     database_url: str = _DEFAULT_DATABASE_URL
     metrics_port: int = 9000
     jwt_secret: bytes | None = None
@@ -93,6 +97,8 @@ class Settings:
             rate_limit=os.environ.get("GATEWAY_RATE_LIMIT", _DEFAULT_RATE_LIMIT),
             features_url=os.environ.get("FEATURES_URL", _DEFAULT_FEATURES_URL),
             detection_url=os.environ.get("DETECTION_URL", _DEFAULT_DETECTION_URL),
+            ingestion_url=os.environ.get("INGESTION_URL", _DEFAULT_INGESTION_URL),
+            prometheus_url=os.environ.get("PROMETHEUS_URL", _DEFAULT_PROMETHEUS_URL),
             database_url=os.environ.get("DATABASE_URL", _DEFAULT_DATABASE_URL),
             metrics_port=int(os.environ.get("METRICS_PORT", "9000")),
             jwt_secret_path=os.environ.get("JWT_SECRET_FILE"),

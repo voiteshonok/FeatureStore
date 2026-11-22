@@ -33,6 +33,8 @@ def make_settings(
         rate_limit=rate_limit,
         features_url="http://features.test",
         detection_url="http://detection.test",
+        ingestion_url="http://ingestion.test",
+        prometheus_url="http://prometheus.test",
         database_url="postgresql://svc_gateway:featurestore@localhost/featurestore",
         metrics_port=0,
         jwt_secret=jwt_secret,

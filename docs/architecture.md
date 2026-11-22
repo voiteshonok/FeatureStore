@@ -105,6 +105,11 @@ commit; stats are derived from the detection consumer's `features.updates`
 window. Session operators only (ADR-020). Event schemas live in
 `libs/schemas.stream`; see [asyncapi/alerts-stream.yaml](asyncapi/alerts-stream.yaml).
 
+`GET /v1/stream/system` is owned by the gateway (ADR-022): a single background
+collector probes service `/ready` every 2 s and Prometheus lag every 5 s, then
+pushes `snapshot` / `change` to all dashboards. Probe load does not scale with
+open tabs. See [asyncapi/system-stream.yaml](asyncapi/system-stream.yaml).
+
 ### Correlation
 
 `event_id` is the correlation id of the pipeline: assigned at ingestion, carried in
@@ -149,8 +154,9 @@ flowchart TB
   (dependency probes with timeouts).
 - Resource limits are set per container; data lives in named volumes.
 - The optional `baseline` profile (ADR-015) runs the SQL measurement stand (`baseline-api` on port 8003) and is not a business service; `make up` does not start it, and the `baseline` schema is not a product bounded context.
-- Prometheus is the optional `obs` profile (`127.0.0.1:9090`) and scrapes each
-  service on port 9000. Grafana and Alertmanager are not in this compose file.
+- Prometheus is part of the default stack (`127.0.0.1:9090`) and scrapes each
+  service on port 9000 (ADR-014, ADR-022). Grafana and Alertmanager are not in
+  this compose file.
 
 ## Fault-tolerance summary (per dependency)
 

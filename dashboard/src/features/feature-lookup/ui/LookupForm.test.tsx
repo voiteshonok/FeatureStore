@@ -32,4 +32,36 @@ describe("LookupForm", () => {
     });
     expect(onSubmit).not.toHaveBeenCalled();
   });
+
+  it("submits a merchant id without a card token", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const initial = emptyLookupForm(Date.now());
+    render(
+      <MantineProvider>
+        <LookupForm initial={initial} submitting={false} onSubmit={onSubmit} />
+      </MantineProvider>,
+    );
+    fireEvent.change(screen.getByLabelText("Merchant id"), { target: { value: "m1868" } });
+    fireEvent.click(screen.getByRole("button", { name: "Look up" }));
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalled();
+    });
+    const [values] = onSubmit.mock.calls[0] ?? [];
+    expect(values).toMatchObject({ cardToken: "", merchantId: "m1868" });
+  });
+
+  it("does not submit when both identifiers are empty", async () => {
+    const onSubmit = vi.fn();
+    const initial = emptyLookupForm(Date.now());
+    render(
+      <MantineProvider>
+        <LookupForm initial={initial} submitting={false} onSubmit={onSubmit} />
+      </MantineProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Look up" }));
+    await waitFor(() => {
+      expect(screen.getByText("Enter a card token or a merchant id")).toBeInTheDocument();
+    });
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
 });

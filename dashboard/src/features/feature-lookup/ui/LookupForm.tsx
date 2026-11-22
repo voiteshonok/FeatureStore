@@ -50,12 +50,9 @@ export function LookupForm({ initial, submitting, onSubmit }: LookupFormProps) {
           autoComplete="off"
           {...register("merchantId")}
         />
-        <Group grow align="flex-start">
-          <TextInput label="Latitude" error={errors.lat?.message} {...register("lat")} />
-          <TextInput label="Longitude" error={errors.lon?.message} {...register("lon")} />
-        </Group>
         <TextInput
           label="Time"
+          description="Windows are read as of now. This time does not select the window."
           type="datetime-local"
           step={1}
           error={errors.ts?.message}
@@ -71,7 +68,7 @@ export function LookupForm({ initial, submitting, onSubmit }: LookupFormProps) {
   );
 }
 
-const FIELDS = ["cardToken", "merchantId", "lat", "lon", "ts"] as const;
+const FIELDS = ["cardToken", "merchantId", "ts"] as const;
 
 function applyFieldErrors(
   err: unknown,
@@ -99,7 +96,7 @@ function formField(name: string): (typeof FIELDS)[number] | null {
   if (name === "merchant_id") {
     return "merchantId";
   }
-  if (name === "lat" || name === "lon" || name === "ts") {
+  if (name === "ts") {
     return name;
   }
   return null;

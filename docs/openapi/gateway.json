@@ -1616,13 +1616,27 @@
             "title": "Lon"
           },
           "card_token": {
-            "type": "string",
-            "minLength": 1,
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Card Token"
           },
           "merchant_id": {
-            "type": "string",
-            "minLength": 1,
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Merchant Id"
           },
           "ts": {
@@ -1634,8 +1648,6 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "card_token",
-          "merchant_id",
           "ts"
         ],
         "title": "FeatureRequest"

@@ -2,6 +2,14 @@
 
 Breaking and notable contract changes for the public `/v1/` surface (gateway).
 
+## 2026-11-22 — Feature lookup by one entity
+
+`POST /v1/features` accepts `card_token`, `merchant_id`, or both. At least one
+is required. The response includes only the catalog features of the entities
+that were sent, plus `geo_velocity_kmh` when a card token is present. Clients
+that send both identifiers still receive all nine features. `lat` and `lon`
+are unchanged.
+
 ## 2026-11-22 — Alert list for the operator UI (T8.4)
 
 `AlertOut` now includes `acknowledged_by` and `resolved_by` (nullable). They were

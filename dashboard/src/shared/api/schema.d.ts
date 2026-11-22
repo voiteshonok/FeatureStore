@@ -409,9 +409,9 @@ export interface components {
             /** Lon */
             lon?: number | null;
             /** Card Token */
-            card_token: string;
+            card_token?: string | null;
             /** Merchant Id */
-            merchant_id: string;
+            merchant_id?: string | null;
             /**
              * Ts
              * Format: date-time

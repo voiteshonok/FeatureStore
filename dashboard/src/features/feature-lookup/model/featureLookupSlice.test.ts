@@ -7,8 +7,6 @@ function entry(index: number): LookupFormValues {
   return {
     cardToken: `token-${index}`,
     merchantId: "m",
-    lat: "",
-    lon: "",
     ts: `2026-11-22T12:00:0${index}`,
   };
 }

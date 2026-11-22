@@ -46,51 +46,57 @@ export function FeatureTable({ catalog, response, elapsedMs }: FeatureTableProps
         </Text>
       ) : (
         <Text size="sm" c="dimmed">
-          Look up a card and merchant to see the values the model receives.
+          Look up a card, a merchant, or both.
         </Text>
       )}
-      {GROUPS.map((group) => {
-        const rows = catalog.filter((entry) => featureGroup(entry) === group.id);
-        if (rows.length === 0) {
-          return null;
-        }
-        return (
-          <div key={group.id}>
-            <Title order={3}>{group.title}</Title>
-            <Table mt="sm">
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Feature</Table.Th>
-                  <Table.Th>Entity</Table.Th>
-                  <Table.Th>Window</Table.Th>
-                  <Table.Th>Value</Table.Th>
-                  <Table.Th>Status</Table.Th>
-                  <Table.Th>As of</Table.Th>
-                  <Table.Th>Age</Table.Th>
-                  <Table.Th>Stale after</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {rows.map((entry) => {
-                  const feature = response?.features[entry.name];
-                  return (
-                    <Table.Tr key={entry.name}>
-                      <Table.Td>{entry.name}</Table.Td>
-                      <Table.Td>{entry.entity}</Table.Td>
-                      <Table.Td>{formatDuration(entry.window_ms)}</Table.Td>
-                      <Table.Td>{formatFeatureValue(entry.agg, feature?.value)}</Table.Td>
-                      <Table.Td>{feature ? <StatusBadge status={feature.status} /> : "—"}</Table.Td>
-                      <Table.Td>{feature?.as_of ? formatClock(feature.as_of) : "—"}</Table.Td>
-                      <Table.Td>{formatAge(feature?.age_ms)}</Table.Td>
-                      <Table.Td>{formatDuration(entry.stale_after_ms)}</Table.Td>
+      {response
+        ? GROUPS.map((group) => {
+            const rows = catalog.filter(
+              (entry) => featureGroup(entry) === group.id && entry.name in response.features,
+            );
+            if (rows.length === 0) {
+              return null;
+            }
+            return (
+              <div key={group.id}>
+                <Title order={3}>{group.title}</Title>
+                <Table mt="sm">
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>Feature</Table.Th>
+                      <Table.Th>Entity</Table.Th>
+                      <Table.Th>Window</Table.Th>
+                      <Table.Th>Value</Table.Th>
+                      <Table.Th>Status</Table.Th>
+                      <Table.Th>As of</Table.Th>
+                      <Table.Th>Age</Table.Th>
+                      <Table.Th>Stale after</Table.Th>
                     </Table.Tr>
-                  );
-                })}
-              </Table.Tbody>
-            </Table>
-          </div>
-        );
-      })}
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {rows.map((entry) => {
+                      const feature = response.features[entry.name];
+                      return (
+                        <Table.Tr key={entry.name}>
+                          <Table.Td>{entry.name}</Table.Td>
+                          <Table.Td>{entry.entity}</Table.Td>
+                          <Table.Td>{formatDuration(entry.window_ms)}</Table.Td>
+                          <Table.Td>{formatFeatureValue(entry.agg, feature?.value)}</Table.Td>
+                          <Table.Td>
+                            {feature ? <StatusBadge status={feature.status} /> : "—"}
+                          </Table.Td>
+                          <Table.Td>{feature?.as_of ? formatClock(feature.as_of) : "—"}</Table.Td>
+                          <Table.Td>{formatAge(feature?.age_ms)}</Table.Td>
+                          <Table.Td>{formatDuration(entry.stale_after_ms)}</Table.Td>
+                        </Table.Tr>
+                      );
+                    })}
+                  </Table.Tbody>
+                </Table>
+              </div>
+            );
+          })
+        : null}
     </Stack>
   );
 }

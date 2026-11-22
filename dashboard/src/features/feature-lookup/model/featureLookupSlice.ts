@@ -16,8 +16,6 @@ function sameLookup(left: LookupFormValues, right: LookupFormValues): boolean {
   return (
     left.cardToken === right.cardToken &&
     left.merchantId === right.merchantId &&
-    left.lat === right.lat &&
-    left.lon === right.lon &&
     left.ts === right.ts
   );
 }

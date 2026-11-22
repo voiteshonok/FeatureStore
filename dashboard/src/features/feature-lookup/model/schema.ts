@@ -12,8 +12,6 @@ const FUTURE_MS = 5_000;
 export type LookupFormValues = {
   cardToken: string;
   merchantId: string;
-  lat: string;
-  lon: string;
   ts: string;
 };
 
@@ -21,8 +19,6 @@ export function emptyLookupForm(now = Date.now()): LookupFormValues {
   return {
     cardToken: "",
     merchantId: "",
-    lat: "",
-    lon: "",
     ts: toLocalInput(new Date(now).toISOString()),
   };
 }
@@ -32,70 +28,36 @@ export function lookupSchema(now = Date.now()) {
     .object({
       cardToken: z.string().trim(),
       merchantId: z.string().trim(),
-      lat: z.string(),
-      lon: z.string(),
       ts: z.string().trim(),
     })
     .superRefine((value, ctx) => {
-      if (PAN.test(value.cardToken)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["cardToken"],
-          message: "A token is required, not a card number",
-        });
-      } else if (!HEX_64.test(value.cardToken)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["cardToken"],
-          message: "Token must be 64 hex characters",
-        });
+      if (value.cardToken.length > 0) {
+        if (PAN.test(value.cardToken)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["cardToken"],
+            message: "A token is required, not a card number",
+          });
+        } else if (!HEX_64.test(value.cardToken)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["cardToken"],
+            message: "Token must be 64 hex characters",
+          });
+        }
       }
-      if (value.merchantId.length === 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["merchantId"],
-          message: "Merchant id is required",
-        });
-      } else if (value.merchantId.length > 64) {
+      if (value.merchantId.length > 64) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["merchantId"],
           message: "At most 64 characters",
         });
       }
-      const lat = readCoord(value.lat);
-      const lon = readCoord(value.lon);
-      if (lat === "bad") {
+      if (value.cardToken.length === 0 && value.merchantId.length === 0) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ["lat"],
-          message: "Latitude must be a number",
-        });
-      } else if (typeof lat === "number" && (lat < -90 || lat > 90)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["lat"],
-          message: "Latitude must be between -90 and 90",
-        });
-      }
-      if (lon === "bad") {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["lon"],
-          message: "Longitude must be a number",
-        });
-      } else if (typeof lon === "number" && (lon < -180 || lon > 180)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["lon"],
-          message: "Longitude must be between -180 and 180",
-        });
-      }
-      if (lat !== "bad" && lon !== "bad" && (lat === null) !== (lon === null)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: [lat === null ? "lat" : "lon"],
-          message: "Enter both coordinates or neither",
+          path: ["cardToken"],
+          message: "Enter a card token or a merchant id",
         });
       }
       if (!value.ts) {
@@ -132,16 +94,16 @@ export function lookupSchema(now = Date.now()) {
 }
 
 export function toFeatureRequest(values: LookupFormValues): FeatureRequest {
-  const lat = readCoord(values.lat);
-  const lon = readCoord(values.lon);
   const body: FeatureRequest = {
-    card_token: values.cardToken.trim().toLowerCase(),
-    merchant_id: values.merchantId.trim(),
     ts: new Date(values.ts).toISOString(),
   };
-  if (typeof lat === "number" && typeof lon === "number") {
-    body.lat = lat;
-    body.lon = lon;
+  const token = values.cardToken.trim().toLowerCase();
+  const merchant = values.merchantId.trim();
+  if (token) {
+    body.card_token = token;
+  }
+  if (merchant) {
+    body.merchant_id = merchant;
   }
   return body;
 }
@@ -151,39 +113,25 @@ export function formFromSearch(params: URLSearchParams, now = Date.now()): Looku
   return {
     cardToken: params.get("card_token") ?? "",
     merchantId: params.get("merchant_id") ?? "",
-    lat: params.get("lat") ?? "",
-    lon: params.get("lon") ?? "",
     ts: ts ? toLocalInput(ts) : toLocalInput(new Date(now).toISOString()),
   };
 }
 
 export function writeLookupSearch(values: LookupFormValues): URLSearchParams {
   const params = new URLSearchParams();
-  params.set("card_token", values.cardToken.trim().toLowerCase());
-  params.set("merchant_id", values.merchantId.trim());
-  if (values.lat.trim()) {
-    params.set("lat", values.lat.trim());
+  const token = values.cardToken.trim().toLowerCase();
+  const merchant = values.merchantId.trim();
+  if (token) {
+    params.set("card_token", token);
   }
-  if (values.lon.trim()) {
-    params.set("lon", values.lon.trim());
+  if (merchant) {
+    params.set("merchant_id", merchant);
   }
   const ts = new Date(values.ts);
   if (!Number.isNaN(ts.getTime())) {
     params.set("ts", ts.toISOString());
   }
   return params;
-}
-
-function readCoord(raw: string): number | null | "bad" {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const value = Number(trimmed);
-  if (!Number.isFinite(value)) {
-    return "bad";
-  }
-  return value;
 }
 
 export function toLocalInput(iso: string): string {

@@ -16,7 +16,7 @@ export function RecentLookups({ items, onPick }: RecentLookupsProps) {
       <Title order={3}>Recent lookups</Title>
       {items.map((item) => (
         <Button
-          key={`${item.cardToken}:${item.merchantId}:${item.ts}:${item.lat}:${item.lon}`}
+          key={`${item.cardToken}:${item.merchantId}:${item.ts}`}
           variant="subtle"
           justify="flex-start"
           onClick={() => {
@@ -24,12 +24,20 @@ export function RecentLookups({ items, onPick }: RecentLookupsProps) {
           }}
         >
           <Text span size="sm">
-            {previewToken(item.cardToken)} · {item.merchantId}
+            {lookupLabel(item)}
           </Text>
         </Button>
       ))}
     </Stack>
   );
+}
+
+function lookupLabel(item: LookupFormValues): string {
+  const token = item.cardToken ? previewToken(item.cardToken) : "";
+  if (token && item.merchantId) {
+    return `${token} · ${item.merchantId}`;
+  }
+  return token || item.merchantId;
 }
 
 function previewToken(token: string): string {

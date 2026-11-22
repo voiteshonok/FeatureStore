@@ -15,16 +15,12 @@ function values(
   overrides: Partial<{
     cardToken: string;
     merchantId: string;
-    lat: string;
-    lon: string;
     ts: string;
   }> = {},
 ) {
   return {
     cardToken: TOKEN,
     merchantId: "merchant-1",
-    lat: "",
-    lon: "",
     ts: localInput(NOW),
     ...overrides,
   };
@@ -43,10 +39,18 @@ describe("lookupSchema", () => {
     expect(short.success).toBe(false);
   });
 
-  it("accepts a 64-hex token and rejects a single coordinate", () => {
-    expect(lookupSchema(NOW).safeParse(values()).success).toBe(true);
-    const one = lookupSchema(NOW).safeParse(values({ lat: "10", lon: "" }));
-    expect(one.success).toBe(false);
+  it("accepts either identifier and rejects both empty", () => {
+    expect(lookupSchema(NOW).safeParse(values({ merchantId: "" })).success).toBe(true);
+    expect(lookupSchema(NOW).safeParse(values({ cardToken: "" })).success).toBe(true);
+    const neither = lookupSchema(NOW).safeParse(values({ cardToken: "", merchantId: "" }));
+    expect(neither.success).toBe(false);
+    if (!neither.success) {
+      expect(
+        neither.error.issues.some(
+          (issue) => issue.message === "Enter a card token or a merchant id",
+        ),
+      ).toBe(true);
+    }
   });
 
   it("rejects a timestamp outside the 24 hour window", () => {
@@ -58,10 +62,19 @@ describe("lookupSchema", () => {
     expect(ahead.success).toBe(false);
   });
 
-  it("omits coordinates when the pair is empty", () => {
-    const body = toFeatureRequest(values());
-    expect(body.lat).toBeUndefined();
-    expect(body.lon).toBeUndefined();
-    expect(body.card_token).toBe(TOKEN);
+  it("sends only the identifiers that were filled", () => {
+    const both = toFeatureRequest(values());
+    expect(both.card_token).toBe(TOKEN);
+    expect(both.merchant_id).toBe("merchant-1");
+    expect(both.lat).toBeUndefined();
+    expect(both.lon).toBeUndefined();
+
+    const card = toFeatureRequest(values({ merchantId: "" }));
+    expect(card.card_token).toBe(TOKEN);
+    expect(card.merchant_id).toBeUndefined();
+
+    const merchant = toFeatureRequest(values({ cardToken: "" }));
+    expect(merchant.card_token).toBeUndefined();
+    expect(merchant.merchant_id).toBe("merchant-1");
   });
 });

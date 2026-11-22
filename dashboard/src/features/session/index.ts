@@ -14,4 +14,3 @@ export { authApi, useGetMeQuery, useLoginMutation, useLogoutMutation } from "./a
 export { SessionBootstrap } from "./ui/SessionBootstrap";
 export { RequireAuth } from "./ui/RequireAuth";
 export { RequireGuest } from "./ui/RequireGuest";
-export { AlertActionStub } from "./ui/AlertActionStub";

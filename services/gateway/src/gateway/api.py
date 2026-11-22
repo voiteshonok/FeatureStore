@@ -49,6 +49,7 @@ from gateway.models import (
     AlertOut,
     AlertUpdate,
     CatalogEntry,
+    Entity,
     FieldErrorOut,
     LoginBody,
     MeOut,
@@ -666,6 +667,7 @@ def _contract_app() -> FastAPI:
     def list_alerts(
         status: Annotated[list[Status] | None, Query()] = None,
         entity: Annotated[str | None, Query()] = None,
+        entity_type: Annotated[Entity | None, Query()] = None,
         rule_id: Annotated[UUID | None, Query()] = None,
         created_from: Annotated[str | None, Query()] = None,
         created_to: Annotated[str | None, Query()] = None,
@@ -673,7 +675,17 @@ def _contract_app() -> FastAPI:
         cursor: Annotated[str | None, Query()] = None,
         limit: Annotated[int, Query(ge=1, le=1000)] = 100,
     ) -> AlertListOut:
-        raise RuntimeError(status, entity, rule_id, created_from, created_to, sort, cursor, limit)
+        raise RuntimeError(
+            status,
+            entity,
+            entity_type,
+            rule_id,
+            created_from,
+            created_to,
+            sort,
+            cursor,
+            limit,
+        )
 
     @contract.get(
         "/v1/alerts/{alert_id}",

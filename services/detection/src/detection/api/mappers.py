@@ -30,6 +30,8 @@ def alert_out(alert: Alert) -> AlertOut:
         created_at=alert.created_at,
         resolved_at=alert.resolved_at,
         acknowledged_at=alert.acknowledged_at,
+        acknowledged_by=alert.acknowledged_by,
+        resolved_by=alert.resolved_by,
         resolution_note=alert.resolution_note,
     )
 

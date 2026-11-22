@@ -1,6 +1,6 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 
-import type { StatsStreamEvent, SystemStreamEvent } from "@shared/api/stream";
+import type { AlertStreamEvent, StatsStreamEvent, SystemStreamEvent } from "@shared/api/stream";
 
 export type StreamConnection = "connecting" | "open" | "reconnecting" | "offline";
 
@@ -23,10 +23,13 @@ export type StreamState = {
   system: SystemStreamEvent | null;
   ruleNames: Record<string, string>;
   highlightedAlertIds: string[];
+  /** Created alerts waiting for the list page to reveal them. */
+  pendingCreated: AlertStreamEvent[];
 };
 
 const STATS_RING_MAX = 300;
 const HIGHLIGHT_MAX = 20;
+const PENDING_MAX = 50;
 
 function idleChannel(): ChannelState {
   return { status: "offline", notOpenSince: null, lastActivityAt: null };
@@ -40,6 +43,7 @@ function freshState(): StreamState {
     system: null,
     ruleNames: {},
     highlightedAlertIds: [],
+    pendingCreated: [],
   };
 }
 
@@ -97,6 +101,20 @@ const streamSlice = createSlice({
         (item) => item !== action.payload,
       );
     },
+    streamAlertQueued(state, action: PayloadAction<AlertStreamEvent>) {
+      const id = action.payload.alert_id;
+      state.pendingCreated = [
+        action.payload,
+        ...state.pendingCreated.filter((item) => item.alert_id !== id),
+      ].slice(0, PENDING_MAX);
+    },
+    streamPendingCleared(state, action: PayloadAction<string[]>) {
+      const drop = new Set(action.payload);
+      state.pendingCreated = state.pendingCreated.filter((item) => !drop.has(item.alert_id));
+    },
+    streamPendingReset(state) {
+      state.pendingCreated = [];
+    },
     streamReset() {
       return freshState();
     },
@@ -115,6 +133,9 @@ export const {
   streamRuleSeen,
   streamAlertHighlighted,
   streamAlertHighlightCleared,
+  streamAlertQueued,
+  streamPendingCleared,
+  streamPendingReset,
   streamReset,
 } = streamSlice.actions;
 export const streamReducer = streamSlice.reducer;

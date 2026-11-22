@@ -7,6 +7,8 @@ import { isOverviewAlertsQuery, OVERVIEW_ALERTS_QUERY } from "./overviewQuery";
 import {
   streamAlertHighlightCleared,
   streamAlertHighlighted,
+  streamAlertQueued,
+  streamPendingReset,
   streamRuleSeen,
   type StreamState,
 } from "./streamSlice";
@@ -54,6 +56,7 @@ export function clearPendingAlerts(): void {
 export function markAlertStreamGap(dispatch: AnyDispatch): void {
   pending.length = 0;
   awaitReload = true;
+  dispatch(streamPendingReset());
   dispatch(baseApi.util.invalidateTags(["Alert"]));
 }
 
@@ -61,6 +64,7 @@ export function noteAlert(event: AlertStreamEvent, options: NoteAlertOptions): v
   options.dispatch(streamRuleSeen({ ruleId: event.rule_id, name: event.rule_name }));
   if (event.op === "created") {
     options.dispatch(streamAlertHighlighted(event.alert_id));
+    options.dispatch(streamAlertQueued(event));
     options.schedule(() => {
       options.dispatch(streamAlertHighlightCleared(event.alert_id));
     }, HIGHLIGHT_MS);
@@ -70,6 +74,7 @@ export function noteAlert(event: AlertStreamEvent, options: NoteAlertOptions): v
     }
   }
   patchDetail(options.dispatch, event);
+  patchShownLists(options.dispatch, options.getState(), event);
   if (awaitReload || !overviewCacheReady(options.getState())) {
     buffer(event);
     return;
@@ -93,6 +98,23 @@ function buffer(event: AlertStreamEvent): void {
   pending.push(event);
   if (pending.length > MAX_PENDING) {
     pending.splice(0, pending.length - MAX_PENDING);
+  }
+}
+
+function patchShownLists(dispatch: AnyDispatch, state: LiveState, event: AlertStreamEvent): void {
+  const cached = baseApi.util.selectCachedArgsForQuery(state, "getAlerts");
+  for (const args of cached) {
+    if (isOverviewAlertsQuery(args)) {
+      continue;
+    }
+    dispatch(
+      baseApi.util.updateQueryData("getAlerts", args, (draft) => {
+        const current = draft.items.find((item) => item.alert_id === event.alert_id);
+        if (current) {
+          current.status = event.status;
+        }
+      }),
+    );
   }
 }
 

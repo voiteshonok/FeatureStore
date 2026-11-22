@@ -17,6 +17,8 @@ export type BaseQueryExtra = {
   forbiddenRedirect?: boolean;
   /** Skip global toasts / redirects (rare). */
   silent?: boolean;
+  /** HTTP statuses that should not raise a global toast. The caller handles them. */
+  silentStatuses?: number[];
 };
 
 function createRawBaseQuery() {
@@ -134,7 +136,9 @@ export const baseQueryWithErrors: BaseQueryFn<
   }
 
   if (failure.status === 409) {
-    notify(messageForErrorType(failure.type ?? "conflict"), "warning");
+    if (!options.silentStatuses?.includes(409)) {
+      notify(messageForErrorType(failure.type ?? "conflict"), "warning");
+    }
     return { error: failure };
   }
 

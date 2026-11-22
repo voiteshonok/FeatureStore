@@ -78,10 +78,7 @@ function makeStore(onType?: (type: string) => void) {
   });
 }
 
-async function seedAlerts(
-  store: ReturnType<typeof makeStore>,
-  items: AlertOut[],
-): Promise<void> {
+async function seedAlerts(store: ReturnType<typeof makeStore>, items: AlertOut[]): Promise<void> {
   await store
     .dispatch(
       baseApi.util.upsertQueryData("getAlerts", OVERVIEW_ALERTS_QUERY, {
@@ -217,5 +214,27 @@ describe("alert cache", () => {
     expect(store.getState().stream.highlightedAlertIds).toContain(alertId(7));
     runs[0]?.();
     expect(store.getState().stream.highlightedAlertIds).not.toContain(alertId(7));
+  });
+
+  it("queues new alerts for the list and patches status without prepending", async () => {
+    const store = makeStore();
+    const listArgs = { limit: 50, sort: "-created_at" as const };
+    await store
+      .dispatch(
+        baseApi.util.upsertQueryData("getAlerts", listArgs, {
+          items: [listItem(alertId(1))],
+          next_cursor: null,
+        }),
+      )
+      .unwrap();
+    noteAlert(streamEvent(2), options(store, 0));
+    const page = () => baseApi.endpoints.getAlerts.select(listArgs)(store.getState()).data;
+    expect(page()?.items.map((item) => item.alert_id)).toEqual([alertId(1)]);
+    expect(store.getState().stream.pendingCreated.map((item) => item.alert_id)).toEqual([
+      alertId(2),
+    ]);
+    noteAlert(streamEvent(1, "updated", "acknowledged"), options(store, 1));
+    expect(page()?.items[0]?.status).toBe("acknowledged");
+    expect(page()?.items).toHaveLength(1);
   });
 });

@@ -339,6 +339,10 @@ export interface components {
             resolved_at: string | null;
             /** Acknowledged At */
             acknowledged_at: string | null;
+            /** Acknowledged By */
+            acknowledged_by?: string | null;
+            /** Resolved By */
+            resolved_by?: string | null;
             /** Resolution Note */
             resolution_note?: string | null;
         };
@@ -863,6 +867,7 @@ export interface operations {
             query?: {
                 status?: ("open" | "acknowledged" | "resolved")[] | null;
                 entity?: string | null;
+                entity_type?: ("card" | "merchant") | null;
                 rule_id?: string | null;
                 created_from?: string | null;
                 created_to?: string | null;

@@ -16,7 +16,7 @@ export function isOverviewAlertsQuery(args: AlertsListArgs): boolean {
   if (args.status && args.status.length > 0) {
     return false;
   }
-  if (args.entity || args.rule_id || args.created_from || args.created_to) {
+  if (args.entity || args.entity_type || args.rule_id || args.created_from || args.created_to) {
     return false;
   }
   return true;

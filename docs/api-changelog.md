@@ -2,6 +2,15 @@
 
 Breaking and notable contract changes for the public `/v1/` surface (gateway).
 
+## 2026-11-22 — Alert list for the operator UI (T8.4)
+
+`AlertOut` now includes `acknowledged_by` and `resolved_by` (nullable). They were
+already stored on `detection.alerts` and were missing from the response.
+
+`GET /v1/alerts` accepts `entity_type=card|merchant`. `card` keeps rows with a
+card token; `merchant` keeps rows with a merchant id. The existing `entity`
+parameter is unchanged and still matches an id exactly.
+
 ## 2026-11-21 — System state stream (T7.5 / ADR-022)
 
 Added `GET /v1/stream/system` (`text/event-stream`): SSE events `snapshot`,

@@ -22,6 +22,7 @@ export const selectStreamSystem = (state: StreamSliceState) => state.stream.syst
 export const selectRuleNames = (state: StreamSliceState) => state.stream.ruleNames;
 export const selectHighlightedAlertIds = (state: StreamSliceState) =>
   state.stream.highlightedAlertIds;
+export const selectPendingCreated = (state: StreamSliceState) => state.stream.pendingCreated;
 
 export const selectStreamConnection = createSelector(
   [selectAlertsChannel, selectSystemChannel],

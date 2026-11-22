@@ -60,3 +60,31 @@ $$;
 
 GRANT USAGE ON SCHEMA ops TO svc_detection;
 GRANT SELECT ON ops.audit_log TO svc_detection;
+
+-- Live stream: push alert id after commit (T7.4 / ADR-021). Payload is small
+-- (NOTIFY limit 8000 bytes). Listener hydrates the full row via the API repo.
+CREATE OR REPLACE FUNCTION detection.notify_alert_change()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    op text;
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        op := 'created';
+    ELSE
+        op := 'updated';
+    END IF;
+    PERFORM pg_notify(
+        'detection_alerts',
+        json_build_object('alert_id', NEW.alert_id, 'op', op)::text
+    );
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS alerts_notify ON detection.alerts;
+CREATE TRIGGER alerts_notify
+    AFTER INSERT OR UPDATE OF status ON detection.alerts
+    FOR EACH ROW
+    EXECUTE FUNCTION detection.notify_alert_change();

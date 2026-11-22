@@ -167,9 +167,13 @@ def create_app(
     async def ready(request: Request) -> JSONResponse:
         postgres_ok = await _postgres_ready(request.app.state.pool)
         kafka_ok = await request.app.state.publisher.ready()
-        if postgres_ok and kafka_ok:
-            return JSONResponse(status_code=200, content={"status": "ready"})
-        return JSONResponse(status_code=503, content={"status": "not_ready"})
+        body = {
+            "status": "ready" if postgres_ok and kafka_ok else "not_ready",
+            "kafka": "ok" if kafka_ok else "down",
+            "postgres": "ok" if postgres_ok else "down",
+        }
+        code = 200 if postgres_ok and kafka_ok else 503
+        return JSONResponse(status_code=code, content=body)
 
     @app.post("/v1/events", status_code=202, response_model=EventAccepted)
     async def post_event(payment: PaymentIn, request: Request) -> EventAccepted:

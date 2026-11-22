@@ -1,9 +1,9 @@
-"""Detection application assembly (ADR-019).
+"""Detection application assembly (ADR-019 / ADR-021).
 
-One process serves the alert API and consumes ``features.updates``. Alert volume
-is far below event volume, so the worker/API split in ADR-007 does not apply.
-The consumer task starts in the application lifespan and commits offsets only
-after the alert write (ADR-003).
+One process serves the alert API, consumes ``features.updates``, and fans out
+the live SSE stream. Alert volume is far below event volume, so the worker/API
+split in ADR-007 does not apply. The consumer task starts in the application
+lifespan and commits offsets only after the alert write (ADR-003).
 """
 
 from __future__ import annotations
@@ -24,9 +24,13 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from detection.api.alerts import router as alerts_router
 from detection.api.rules import router as rules_router
+from detection.api.stream import router as stream_router
 from detection.consumer import DetectionConsumer, configure_logging
 from detection.db import make_engine, make_session_factory
 from detection.errors import install_error_handlers, install_request_id_middleware
+from detection.live.broadcast import BroadcastHub
+from detection.live.listener import AlertNotifyListener, run_stats_ticker
+from detection.live.stats import LiveStats
 from detection.metrics import METRICS, DetectionMetrics, start_metrics_server
 from detection.rules import RuleCache
 from detection.settings import Settings
@@ -50,7 +54,8 @@ async def _probe_postgres(engine: AsyncEngine) -> None:
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state.settings
-    start_metrics_server(settings.metrics_port, app.state.metrics.registry)
+    metrics: DetectionMetrics = app.state.metrics
+    start_metrics_server(settings.metrics_port, metrics.registry)
     configure_logging()
     pool: AsyncConnectionPool[AsyncConnection[TupleRow]] = AsyncConnectionPool(
         settings.database_url,
@@ -61,23 +66,56 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = make_engine(settings.database_url)
     session_factory: async_sessionmaker[AsyncSession] = make_session_factory(engine)
     cache = RuleCache()
+    stats = LiveStats()
+    hub = BroadcastHub(
+        on_subscribers_changed=metrics.stream_subscribers.set,
+        on_dropped=metrics.stream_dropped.inc,
+    )
+    app.state.stats = stats
+    app.state.broadcast = hub
     service: DetectionConsumer | None = None
     await pool.open(wait=True, timeout=30)
     app.state.pool = pool
     app.state.engine = engine
     app.state.session_factory = session_factory
+    listener = AlertNotifyListener(
+        settings.database_url,
+        session_factory,
+        hub,
+        on_delivered=metrics.stream_delivery.observe,
+    )
     try:
-        service = await DetectionConsumer.connect(settings, pool, cache, metrics=app.state.metrics)
+        service = await DetectionConsumer.connect(
+            settings,
+            pool,
+            cache,
+            metrics=metrics,
+            stats=stats,
+        )
         await service.reload_with_retry()
-        task = asyncio.create_task(service.run(), name="detection")
+        consumer_task = asyncio.create_task(service.run(), name="detection")
+        listener_task = asyncio.create_task(listener.run(), name="detection-notify")
+        stats_task = asyncio.create_task(
+            run_stats_ticker(hub, stats),
+            name="detection-stats",
+        )
         app.state.service = service
-        app.state.consumer_task = task
+        app.state.consumer_task = consumer_task
+        app.state.listener_task = listener_task
+        app.state.stats_task = stats_task
         try:
             yield
         finally:
-            task.cancel()
+            listener.stop()
+            for task in (stats_task, listener_task, consumer_task):
+                task.cancel()
             with suppress(asyncio.CancelledError):
-                await task
+                await asyncio.gather(
+                    stats_task,
+                    listener_task,
+                    consumer_task,
+                    return_exceptions=True,
+                )
     finally:
         if service is not None:
             await service.aclose()
@@ -95,6 +133,11 @@ def create_app(
     application = FastAPI(title="detection", lifespan=_lifespan)
     application.state.settings = settings or Settings.from_env()
     application.state.metrics = METRICS if metrics is None else metrics
+    # Defaults for unit tests that never enter lifespan.
+    if not hasattr(application.state, "broadcast"):
+        application.state.broadcast = BroadcastHub()
+    if not hasattr(application.state, "stats"):
+        application.state.stats = LiveStats()
     install_request_id_middleware(application)
     install_error_handlers(application)
 
@@ -121,6 +164,7 @@ def create_app(
 
     application.include_router(alerts_router)
     application.include_router(rules_router)
+    application.include_router(stream_router)
 
     if include_test_routes:
 

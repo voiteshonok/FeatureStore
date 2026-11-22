@@ -92,12 +92,13 @@ http://localhost:8080/docs (requests need `X-API-Key`, dev keys in
 
 ## Metrics
 
-Prometheus is optional and scrapes metrics ports (ADR-014), including the
-baseline processes when that profile is up. `make up` does not start it.
+Prometheus scrapes metrics ports (ADR-014) and feeds consumer lag into the
+system state stream (ADR-022). `make up` starts it on `127.0.0.1:9090`.
+`make obs-up` remains as an alias. Baseline jobs are scraped when that profile
+is up.
 
 ```bash
 make up
-make obs-up
 ```
 
 UI: http://127.0.0.1:9090. Target health: http://127.0.0.1:9090/targets.

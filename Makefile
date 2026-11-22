@@ -1,6 +1,6 @@
 COMPOSE := docker compose -f infra/docker-compose.yml
 # `up` does not enable profiles. `down` must, or those containers keep the network.
-PROFILES := --profile baseline --profile obs --profile sim
+PROFILES := --profile baseline --profile sim
 KAFKA_BOOTSTRAP := localhost:9092
 KAFKA_TOPICS := /opt/kafka/bin/kafka-topics.sh
 
@@ -9,10 +9,10 @@ KAFKA_TOPICS := /opt/kafka/bin/kafka-topics.sh
 up:
 	$(COMPOSE) up -d --wait kafka postgres redis clickhouse
 	$(MAKE) topics
-	$(COMPOSE) up -d --wait ingestion features-worker features-offline features-api detection gateway
+	$(COMPOSE) up -d --wait ingestion features-worker features-offline features-api detection prometheus gateway
 
 obs-up:
-	$(COMPOSE) --profile obs up -d --wait prometheus
+	$(COMPOSE) up -d --wait prometheus
 
 baseline-up:
 	$(COMPOSE) --profile baseline up -d --wait baseline-writer baseline-api

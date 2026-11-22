@@ -1,0 +1,63 @@
+asyncapi: 3.0.0
+info:
+  title: FeatureStore alert live stream
+  version: 0.1.0
+  description: |
+    Server-Sent Events on GET /v1/stream/alerts (ADR-021).
+    OpenAPI does not describe this stream; schemas match libs/schemas.stream.
+channels:
+  streamAlerts:
+    address: /v1/stream/alerts
+    messages:
+      alert:
+        name: alert
+        payload:
+          $ref: "#/components/schemas/AlertStreamEvent"
+      stats:
+        name: stats
+        payload:
+          $ref: "#/components/schemas/StatsStreamEvent"
+      reset:
+        name: reset
+        payload:
+          $ref: "#/components/schemas/ResetStreamEvent"
+operations:
+  receiveStream:
+    action: receive
+    channel:
+      $ref: "#/channels/streamAlerts"
+components:
+  schemas:
+    AlertStreamEvent:
+      type: object
+      additionalProperties: false
+      required: [id, op, alert_id, rule_id, rule_name, status, entity, entity_id, created_at]
+      properties:
+        id: {type: integer}
+        op: {enum: [created, updated]}
+        alert_id: {type: string, format: uuid}
+        rule_id: {type: string, format: uuid}
+        rule_name: {type: string}
+        status: {enum: [open, acknowledged, resolved]}
+        entity: {enum: [card, merchant]}
+        entity_id: {type: string}
+        created_at: {type: string, format: date-time}
+    StatsStreamEvent:
+      type: object
+      additionalProperties: false
+      required:
+        [events_per_s, events_per_s_avg_60s, alerts_60s_by_rule, active_cards_60s]
+      properties:
+        events_per_s: {type: number}
+        events_per_s_avg_60s: {type: number}
+        alerts_60s_by_rule:
+          type: object
+          additionalProperties: {type: integer}
+        latency_p50_ms: {type: number, nullable: true}
+        latency_p95_ms: {type: number, nullable: true}
+        active_cards_60s: {type: integer}
+    ResetStreamEvent:
+      type: object
+      additionalProperties: false
+      properties:
+        reason: {enum: [gap, reconnect]}

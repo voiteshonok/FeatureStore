@@ -2,6 +2,22 @@
 
 Breaking and notable contract changes for the public `/v1/` surface (gateway).
 
+## 2026-11-21 — System state stream (T7.5 / ADR-022)
+
+Added `GET /v1/stream/system` (`text/event-stream`): SSE events `snapshot`,
+`change`, and `: ping` every 15 s. Session operators only (same RBAC as alert
+reads). Schemas in `libs/schemas.stream`; AsyncAPI at
+`docs/asyncapi/system-stream.yaml`. OpenAPI does not describe the stream body.
+Prometheus is part of the default compose stack for consumer lag; when it is
+down, `lag` is `null` and HTTP-derived statuses still flow.
+
+## 2026-11-21 — Live alert/stats stream (T7.4 / ADR-021)
+
+Added `GET /v1/stream/alerts` (`text/event-stream`): SSE events `alert`, `stats`,
+`reset`, and `: ping` every 15 s. Session operators only (ADR-020). Schemas in
+`libs/schemas.stream`; short AsyncAPI at `docs/asyncapi/alerts-stream.yaml`.
+OpenAPI does not describe the stream body.
+
 ## 2026-11-21 — Operator login (T7.3 / ADR-020)
 
 **Breaking** for clients that used the `dashboard` API key.

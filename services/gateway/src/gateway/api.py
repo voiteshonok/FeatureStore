@@ -8,8 +8,9 @@ import asyncio
 import json
 import logging
 import time
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal, cast
 from uuid import UUID, uuid4
@@ -18,7 +19,7 @@ import httpx
 import uvicorn
 from fastapi import FastAPI, Query
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from psycopg import AsyncConnection
 from psycopg.rows import TupleRow
 from psycopg_pool import AsyncConnectionPool
@@ -56,8 +57,11 @@ from gateway.models import (
     Sort,
     Status,
 )
-from gateway.proxy import forward, new_client
+from gateway.proxy import forward, forward_stream, new_client
 from gateway.settings import Settings
+from gateway.system.collector import SystemCollector
+from gateway.system.hub import SubscriberFull, SystemHub
+from gateway.system.sse import sse_frames
 from schemas import FeatureRequest, FeatureResponse
 
 _PORT = 8080
@@ -563,6 +567,75 @@ def _install_routes(app: FastAPI, limiter: Limiter, rate: str) -> None:
     async def get_catalog(request: Request) -> Response:
         return await _catalog(request)
 
+    @app.get("/v1/stream/alerts")
+    @limited
+    async def stream_alerts(request: Request) -> Response:
+        settings: Settings = request.app.state.settings
+        close_after_s: float | None = None
+        claims = getattr(request.state, "session_claims", None)
+        if claims is not None and getattr(claims, "exp", None) is not None:
+            remaining = (claims.exp - datetime.now(UTC)).total_seconds()
+            close_after_s = max(0.0, remaining)
+        return await forward_stream(
+            request.app.state.client,
+            request,
+            base_url=settings.detection_url,
+            service="detection",
+            close_after_s=close_after_s,
+        )
+
+    @app.get("/v1/stream/system")
+    @limited
+    async def stream_system(request: Request) -> Response:
+        hub: SystemHub = request.app.state.system_hub
+        if hub.is_full:
+            return problem_response(
+                request,
+                type="upstream_unavailable",
+                title="too many stream subscribers",
+                status=503,
+            )
+
+        async def frames() -> AsyncIterator[bytes]:
+            # Async generator (not plain iterator) so ``aclose`` works on disconnect.
+            agen: AsyncGenerator[bytes, None] = sse_frames(hub)
+            pending: asyncio.Task[bytes] = asyncio.create_task(anext(agen))
+            try:
+                while True:
+                    if await request.is_disconnected():
+                        break
+                    # ``asyncio.wait`` times out without cancelling ``anext``.
+                    done, _ = await asyncio.wait({pending}, timeout=0.5)
+                    if not done:
+                        # Comment tick: surfaces client disconnect on ASGI yield.
+                        yield b":\n\n"
+                        continue
+                    try:
+                        chunk = pending.result()
+                    except StopAsyncIteration:
+                        break
+                    except SubscriberFull:
+                        return
+                    yield chunk
+                    pending = asyncio.create_task(anext(agen))
+            finally:
+                pending.cancel()
+                try:
+                    await pending
+                except (asyncio.CancelledError, StopAsyncIteration, SubscriberFull):
+                    pass
+                await agen.aclose()
+
+        return StreamingResponse(
+            frames(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
 
 def _contract_app() -> FastAPI:
     """Routes used only to build the OpenAPI document."""
@@ -745,13 +818,28 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         max_size=4,
         open=False,
     )
+    hub = SystemHub()
+    app.state.system_hub = hub
+    collector: SystemCollector | None = None
     try:
         await pool.open(wait=True, timeout=30)
         app.state.client = client
         app.state.pool = pool
+        collector = SystemCollector(
+            hub,
+            ingestion_url=settings.ingestion_url,
+            features_url=settings.features_url,
+            detection_url=settings.detection_url,
+            prometheus_url=settings.prometheus_url,
+            pool=pool,
+        )
+        app.state.system_collector = collector
+        collector.start()
         try:
             yield
         finally:
+            if collector is not None:
+                await collector.aclose()
             await pool.close()
     finally:
         await client.aclose()
@@ -768,6 +856,8 @@ def create_app(
     app = FastAPI(title="gateway", version="0.1.0", lifespan=_lifespan)
     app.state.settings = resolved
     app.state.metrics = METRICS if metrics is None else metrics
+    app.state.system_hub = SystemHub()
+    app.state.system_collector = None
     if resolved.jwt_secret is not None:
         app.state.jwt_secret = resolved.jwt_secret
     configure_logging()

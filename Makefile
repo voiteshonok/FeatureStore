@@ -4,7 +4,7 @@ PROFILES := --profile baseline --profile sim
 KAFKA_BOOTSTRAP := localhost:9092
 KAFKA_TOPICS := /opt/kafka/bin/kafka-topics.sh
 
-.PHONY: up down logs ps topics secret lint typecheck test test-int test-e2e clean openapi pan-scan audit obs-up baseline-up backfill exp-k1k2 exp-k1k2-short exp-ladder
+.PHONY: up down logs ps topics secret lint typecheck test test-int test-e2e clean openapi pan-scan audit obs-up baseline-up backfill demo exp-k1k2 exp-k1k2-short exp-ladder
 
 up:
 	$(COMPOSE) up -d --wait kafka postgres redis clickhouse
@@ -26,6 +26,15 @@ backfill:
 		--send-rate $(or $(SEND_RATE),2000) \
 		--seed $(or $(SEED),42) \
 		--run-id $(or $(RUN_ID),warm) \
+		--url http://ingestion:8000
+
+# Live demo traffic with anomaly scenarios (card burst + bad merchants).
+demo: up
+	$(COMPOSE) --profile sim run --build --rm simulator \
+		--tps 50 \
+		--duration 5m \
+		--seed 42 \
+		--anomalies \
 		--url http://ingestion:8000
 
 # First K1/K2 + Redis memory pack → experiments/results/<date>-k1-k2/

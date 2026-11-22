@@ -10,8 +10,15 @@ from datetime import UTC, datetime, timedelta
 import httpx
 
 from schemas import PaymentIn
-from simulator.config import load_config
-from simulator.generator import StepClock, backfill_clock, generate
+from simulator.config import SimulatorConfig, load_config
+from simulator.generator import (
+    GeneratedPayment,
+    GenerateState,
+    StepClock,
+    backfill_clock,
+    generate,
+    generate_burst,
+)
 
 _MAX_ATTEMPTS = 5
 _BACKOFF_START_S = 0.1
@@ -37,6 +44,9 @@ class Stats:
     latencies_ms: list[float] = field(default_factory=list)
     event_time_min: datetime | None = None
     event_time_max: datetime | None = None
+    anomalies: dict[str, int] = field(
+        default_factory=lambda: {"burst": 0, "bad_merchant": 0, "travel": 0}
+    )
 
     @property
     def achieved_tps(self) -> float:
@@ -44,8 +54,8 @@ class Stats:
             return 0.0
         return self.generated / self.elapsed_s
 
-    def to_json(self) -> dict[str, float | int | str]:
-        payload: dict[str, float | int | str] = {
+    def to_json(self) -> dict[str, float | int | str | dict[str, int]]:
+        payload: dict[str, float | int | str | dict[str, int]] = {
             "generated": self.generated,
             "sent": self.sent,
             "accepted": self.accepted,
@@ -58,6 +68,7 @@ class Stats:
             "latency_p50_ms": _percentile(self.latencies_ms, 50),
             "latency_p95_ms": _percentile(self.latencies_ms, 95),
             "elapsed_s": self.elapsed_s,
+            "anomalies": dict(self.anomalies),
         }
         if self.event_time_min is not None and self.event_time_max is not None:
             payload["event_time_min"] = self.event_time_min.isoformat()
@@ -122,12 +133,16 @@ async def run_sender(
     run_id: str = "0",
     client: httpx.AsyncClient | None = None,
     report: bool = True,
+    config: SimulatorConfig | None = None,
+    anomalies: bool = False,
 ) -> Stats:
     """Generate payments for ``duration_s`` and post them at ``tps``.
 
     ``run_id`` changes ``event_id`` and ``payment_id`` only. The default keeps a
     run reproducible; the command line picks a random id when none is given.
+    ``anomalies`` enables the profile anomaly section for this run.
     """
+    resolved = _resolve_config(config, anomalies=anomalies)
     if client is None:
         async with _client() as owned:
             return await _run(
@@ -138,6 +153,7 @@ async def run_sender(
                 seed=seed,
                 run_id=run_id,
                 report=report,
+                config=resolved,
             )
     return await _run(
         client,
@@ -147,6 +163,7 @@ async def run_sender(
         seed=seed,
         run_id=run_id,
         report=report,
+        config=resolved,
     )
 
 
@@ -162,6 +179,8 @@ async def run_backfill(
     t0: datetime | None = None,
     client: httpx.AsyncClient | None = None,
     report: bool = True,
+    config: SimulatorConfig | None = None,
+    anomalies: bool = False,
 ) -> Stats:
     """Post ``depth_s`` of history at ``send_rate``, with virtual density ``tps``.
 
@@ -179,6 +198,7 @@ async def run_backfill(
         msg = "max-in-flight must be positive"
         raise ValueError(msg)
     origin = datetime.now(UTC) if t0 is None else t0
+    resolved = _resolve_config(config, anomalies=anomalies)
     if client is None:
         async with _client() as owned:
             return await _run_backfill(
@@ -192,6 +212,7 @@ async def run_backfill(
                 max_in_flight=max_in_flight,
                 t0=origin,
                 report=report,
+                config=resolved,
             )
     return await _run_backfill(
         client,
@@ -204,7 +225,62 @@ async def run_backfill(
         max_in_flight=max_in_flight,
         t0=origin,
         report=report,
+        config=resolved,
     )
+
+
+async def run_burst(
+    *,
+    url: str,
+    seed: int,
+    card_index: int,
+    count: int,
+    run_id: str = "0",
+    client: httpx.AsyncClient | None = None,
+    config: SimulatorConfig | None = None,
+) -> Stats:
+    """Post one card-velocity burst immediately (demo / video)."""
+    resolved = config if config is not None else load_config()
+    items = generate_burst(
+        resolved,
+        seed=seed,
+        card_index=card_index,
+        count=count,
+        run_id=run_id,
+    )
+    if client is None:
+        async with _client() as owned:
+            return await _post_items(owned, url=url, items=items)
+    return await _post_items(client, url=url, items=items)
+
+
+def _resolve_config(config: SimulatorConfig | None, *, anomalies: bool) -> SimulatorConfig:
+    base = config if config is not None else load_config()
+    if anomalies:
+        return base.with_anomalies_enabled()
+    return base
+
+
+async def _post_items(
+    client: httpx.AsyncClient,
+    *,
+    url: str,
+    items: list[GeneratedPayment],
+) -> Stats:
+    endpoint = url.rstrip("/") + "/v1/events"
+    stats = Stats()
+    lock = asyncio.Lock()
+    started = time.monotonic()
+    tasks: list[asyncio.Task[None]] = []
+    for item in items:
+        async with lock:
+            stats.generated += 1
+            if item.kind in stats.anomalies:
+                stats.anomalies[item.kind] = stats.anomalies.get(item.kind, 0) + 1
+        tasks.append(asyncio.create_task(post_payment(client, endpoint, item.payment, stats, lock)))
+    await asyncio.gather(*tasks)
+    stats.elapsed_s = time.monotonic() - started
+    return stats
 
 
 async def post_payment(
@@ -276,10 +352,12 @@ async def _run(
     seed: int,
     run_id: str,
     report: bool,
+    config: SimulatorConfig,
 ) -> Stats:
     endpoint = url.rstrip("/") + "/v1/events"
     clock = StepClock(datetime.now(UTC), timedelta(seconds=1 / tps))
-    stream = generate(load_config(), seed, clock, run_id=run_id)
+    state = GenerateState()
+    stream = generate(config, seed, clock, run_id=run_id, state=state)
     stats = Stats()
     lock = asyncio.Lock()
     bucket = TokenBucket(tps)
@@ -305,6 +383,7 @@ async def _run(
     finally:
         if stats.elapsed_s == 0:
             stats.elapsed_s = time.monotonic() - started
+        stats.anomalies = state.anomalies.as_dict()
         stop.set()
         if reporter is not None:
             await reporter
@@ -323,10 +402,12 @@ async def _run_backfill(
     max_in_flight: int,
     t0: datetime,
     report: bool,
+    config: SimulatorConfig,
 ) -> Stats:
     endpoint = url.rstrip("/") + "/v1/events"
     clock, horizon, floor = backfill_clock(t0, timedelta(seconds=depth_s), tps)
-    stream = generate(load_config(), seed, clock, run_id=run_id, horizon=horizon, floor=floor)
+    state = GenerateState()
+    stream = generate(config, seed, clock, run_id=run_id, horizon=horizon, floor=floor, state=state)
     stats = Stats()
     lock = asyncio.Lock()
     bucket = TokenBucket(send_rate)
@@ -356,6 +437,7 @@ async def _run_backfill(
             await asyncio.gather(*pending)
     finally:
         stats.elapsed_s = time.monotonic() - started
+        stats.anomalies = state.anomalies.as_dict()
         stop.set()
         if reporter is not None:
             await reporter

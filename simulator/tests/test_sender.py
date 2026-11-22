@@ -30,6 +30,7 @@ _KEYS = {
     "latency_p50_ms",
     "latency_p95_ms",
     "elapsed_s",
+    "anomalies",
 }
 
 
@@ -66,6 +67,7 @@ def test_stats_json_keys() -> None:
     payload = stats.to_json()
     assert set(payload) == _KEYS
     assert payload["achieved_tps"] == 2
+    assert payload["anomalies"] == {"burst": 0, "bad_merchant": 0, "travel": 0}
 
 
 async def test_accepted_and_duplicate_are_counted() -> None:

@@ -72,6 +72,11 @@ make ps            # check health
 make baseline-up   # SQL measurement stand on :8003 (ADR-015); not a service, not started by make up
 # send traffic:
 docker compose -f infra/docker-compose.yml --profile sim up simulator
+# demo with anomaly scenarios (card bursts + bad merchants) at 50 TPS:
+make demo
+# one-shot card burst (fires card_velocity_burst for video/demo):
+docker compose -f infra/docker-compose.yml --profile sim run --rm simulator \
+  burst --card-index 0 --count 12 --seed 42 --url http://ingestion:8000
 # fill a few minutes of history through ingestion:
 make backfill      # 3m at 200 TPS, about 5 minutes wall time; override BACKFILL, TPS, SEND_RATE, SEED
 ```

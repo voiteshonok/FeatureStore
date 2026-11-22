@@ -36,3 +36,22 @@ cities:
   - name: Amsterdam
     lat: 52.3676
     lon: 4.9041
+anomalies:
+  enabled: false
+  burst:
+    enabled: true
+    rate_per_min: 1.0
+    size_min: 8
+    size_max: 15
+    window_s: 60
+  bad_merchant:
+    enabled: true
+    count: 5
+    traffic_share: 0.02
+    decline_rate_min: 0.4
+    decline_rate_max: 0.6
+  travel:
+    enabled: true
+    rate_per_min: 0.2
+    gap_min_s: 60
+    gap_max_s: 600

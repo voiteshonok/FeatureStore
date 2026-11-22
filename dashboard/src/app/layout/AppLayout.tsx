@@ -14,6 +14,7 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { ErrorBoundary } from "@app/ErrorBoundary";
 import { ColorSchemeToggle } from "@app/layout/ColorSchemeToggle";
+import { StaleBanner } from "@features/stream/ui/StaleBanner";
 import {
   selectIsAuthenticated,
   selectSessionStatus,
@@ -121,6 +122,7 @@ export function AppLayout() {
       ) : null}
 
       <AppShell.Main>
+        <StaleBanner />
         <ErrorBoundary title="This page crashed">
           <Outlet />
         </ErrorBoundary>

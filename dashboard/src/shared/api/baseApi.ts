@@ -8,6 +8,10 @@ type CatalogResponse =
 type AlertUpdate = components["schemas"]["AlertUpdate"];
 type AlertDetail =
   paths["/v1/alerts/{alert_id}"]["get"]["responses"]["200"]["content"]["application/json"];
+type AlertList = components["schemas"]["AlertListOut"];
+type RuleOut = components["schemas"]["RuleOut"];
+
+export type AlertsListArgs = NonNullable<paths["/v1/alerts"]["get"]["parameters"]["query"]>;
 
 /**
  * Shared RTK Query API. Cookie session + CSRF header (ADR-020).
@@ -21,6 +25,23 @@ export const baseApi = createApi({
     getCatalog: build.query<CatalogResponse, undefined>({
       query: () => "/catalog",
       providesTags: ["Catalog"],
+    }),
+    getAlerts: build.query<AlertList, AlertsListArgs>({
+      query: (args) => ({
+        url: "/alerts",
+        params: args,
+      }),
+      providesTags: (result) => {
+        const items = result?.items ?? [];
+        return [
+          { type: "Alert" as const, id: "LIST" },
+          ...items.map((item) => ({ type: "Alert" as const, id: item.alert_id })),
+        ];
+      },
+    }),
+    getRules: build.query<RuleOut[], undefined>({
+      query: () => "/rules",
+      providesTags: ["Rule"],
     }),
     getAlert: build.query<AlertDetail, string>({
       query: (alertId) => `/alerts/${alertId}`,
@@ -37,4 +58,10 @@ export const baseApi = createApi({
   }),
 });
 
-export const { useGetCatalogQuery, useGetAlertQuery, usePatchAlertMutation } = baseApi;
+export const {
+  useGetCatalogQuery,
+  useGetAlertsQuery,
+  useGetRulesQuery,
+  useGetAlertQuery,
+  usePatchAlertMutation,
+} = baseApi;

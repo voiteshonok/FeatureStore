@@ -4,58 +4,117 @@ import type { StatsStreamEvent, SystemStreamEvent } from "@shared/api/stream";
 
 export type StreamConnection = "connecting" | "open" | "reconnecting" | "offline";
 
+export type StreamChannelName = "alerts" | "system";
+
+export type ChannelState = {
+  status: StreamConnection;
+  /** When this channel last left `open`, or when connecting started. */
+  notOpenSince: string | null;
+  /** Last SSE frame, including `: ping`. */
+  lastActivityAt: string | null;
+};
+
+export type StatsPoint = StatsStreamEvent & { receivedAt: string };
+
 export type StreamState = {
-  connection: StreamConnection;
-  lastEventAt: string | null;
-  statsRing: StatsStreamEvent[];
+  alertsChannel: ChannelState;
+  systemChannel: ChannelState;
+  statsRing: StatsPoint[];
   system: SystemStreamEvent | null;
+  ruleNames: Record<string, string>;
+  highlightedAlertIds: string[];
 };
 
 const STATS_RING_MAX = 300;
+const HIGHLIGHT_MAX = 20;
 
-const initialState: StreamState = {
-  connection: "offline",
-  lastEventAt: null,
-  statsRing: [],
-  system: null,
-};
+function idleChannel(): ChannelState {
+  return { status: "offline", notOpenSince: null, lastActivityAt: null };
+}
+
+function freshState(): StreamState {
+  return {
+    alertsChannel: idleChannel(),
+    systemChannel: idleChannel(),
+    statsRing: [],
+    system: null,
+    ruleNames: {},
+    highlightedAlertIds: [],
+  };
+}
 
 const streamSlice = createSlice({
   name: "stream",
-  initialState,
+  initialState: freshState(),
   reducers: {
-    streamConnectionChanged(state, action: PayloadAction<StreamConnection>) {
-      state.connection = action.payload;
+    streamChannelStatus(
+      state,
+      action: PayloadAction<{ channel: StreamChannelName; status: StreamConnection; at: string }>,
+    ) {
+      const channel = channelState(state, action.payload.channel);
+      const next = action.payload.status;
+      if (next === "open") {
+        channel.status = "open";
+        channel.notOpenSince = null;
+        channel.lastActivityAt = action.payload.at;
+        return;
+      }
+      const wasOpen = channel.status === "open";
+      channel.status = next;
+      if (wasOpen || channel.notOpenSince == null) {
+        channel.notOpenSince = action.payload.at;
+      }
     },
-    streamEventReceived(state, action: PayloadAction<string>) {
-      state.lastEventAt = action.payload;
+    streamChannelActivity(
+      state,
+      action: PayloadAction<{ channel: StreamChannelName; at: string }>,
+    ) {
+      channelState(state, action.payload.channel).lastActivityAt = action.payload.at;
     },
-    streamStatsPushed(state, action: PayloadAction<StatsStreamEvent>) {
+    streamStatsPushed(state, action: PayloadAction<StatsPoint>) {
       state.statsRing.push(action.payload);
       if (state.statsRing.length > STATS_RING_MAX) {
-        state.statsRing = state.statsRing.slice(-STATS_RING_MAX);
+        state.statsRing.splice(0, state.statsRing.length - STATS_RING_MAX);
       }
-      state.lastEventAt = new Date().toISOString();
+      state.alertsChannel.lastActivityAt = action.payload.receivedAt;
     },
-    streamSystemUpdated(state, action: PayloadAction<SystemStreamEvent>) {
-      state.system = action.payload;
-      state.lastEventAt = new Date().toISOString();
+    streamSystemUpdated(state, action: PayloadAction<{ event: SystemStreamEvent; at: string }>) {
+      state.system = action.payload.event;
+      state.systemChannel.lastActivityAt = action.payload.at;
+    },
+    streamRuleSeen(state, action: PayloadAction<{ ruleId: string; name: string }>) {
+      state.ruleNames[action.payload.ruleId] = action.payload.name;
+    },
+    streamAlertHighlighted(state, action: PayloadAction<string>) {
+      const id = action.payload;
+      state.highlightedAlertIds = [
+        id,
+        ...state.highlightedAlertIds.filter((item) => item !== id),
+      ].slice(0, HIGHLIGHT_MAX);
+    },
+    streamAlertHighlightCleared(state, action: PayloadAction<string>) {
+      state.highlightedAlertIds = state.highlightedAlertIds.filter(
+        (item) => item !== action.payload,
+      );
     },
     streamReset() {
-      return initialState;
+      return freshState();
     },
   },
 });
 
+function channelState(state: StreamState, name: StreamChannelName): ChannelState {
+  return name === "alerts" ? state.alertsChannel : state.systemChannel;
+}
+
 export const {
-  streamConnectionChanged,
-  streamEventReceived,
+  streamChannelStatus,
+  streamChannelActivity,
   streamStatsPushed,
   streamSystemUpdated,
+  streamRuleSeen,
+  streamAlertHighlighted,
+  streamAlertHighlightCleared,
   streamReset,
 } = streamSlice.actions;
 export const streamReducer = streamSlice.reducer;
-
-export const selectStreamConnection = (state: { stream: StreamState }) => state.stream.connection;
-export const selectStreamSystem = (state: { stream: StreamState }) => state.stream.system;
-export const selectStatsRing = (state: { stream: StreamState }) => state.stream.statsRing;

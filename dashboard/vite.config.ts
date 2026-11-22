@@ -20,6 +20,19 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      "/api/v1/stream": {
+        target: "http://127.0.0.1:8080",
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api/, ""),
+        timeout: 0,
+        proxyTimeout: 0,
+        configure: (proxy) => {
+          proxy.on("proxyRes", (proxyRes) => {
+            proxyRes.headers["cache-control"] = "no-cache";
+            proxyRes.headers["x-accel-buffering"] = "no";
+          });
+        },
+      },
       "/api": {
         target: "http://127.0.0.1:8080",
         changeOrigin: true,

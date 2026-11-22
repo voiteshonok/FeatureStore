@@ -1,19 +1,86 @@
-import { Group, Stack, Text, Title } from "@mantine/core";
+import { memo, type ReactNode } from "react";
 
-import { AlertActionStub } from "@features/session";
+import { Box, SimpleGrid, Stack, Text, Title } from "@mantine/core";
+import { useSelector } from "react-redux";
+
+import { OVERVIEW_ALERTS_QUERY } from "@features/stream/model/overviewQuery";
+import { selectLatestStats, selectStaleSince } from "@features/stream/model/streamSelectors";
+import type { StreamState } from "@features/stream/model/streamSlice";
+import { AlertsByRuleChart } from "@features/stream/ui/AlertsByRuleChart";
+import { EventsChart } from "@features/stream/ui/EventsChart";
+import { RecentAlerts } from "@features/stream/ui/RecentAlerts";
+import { StatTiles } from "@features/stream/ui/StatTiles";
+import { useNow } from "@features/stream/ui/useNow";
+import { SystemGrid } from "@features/system/ui/SystemGrid";
+import { useGetAlertsQuery, useGetRulesQuery } from "@shared/api/baseApi";
+import type { components } from "@shared/api/schema";
+import { OverviewSkeleton } from "@shared/ui/OverviewSkeleton";
+
+import "@mantine/charts/styles.css";
+
+type AlertOut = components["schemas"]["AlertOut"];
+type RuleOut = components["schemas"]["RuleOut"];
 
 export default function OverviewPage() {
+  const alerts = useGetAlertsQuery(OVERVIEW_ALERTS_QUERY);
+  const rules = useGetRulesQuery(undefined);
+  const latestAt = useSelector(
+    (state: { stream: StreamState }) => selectLatestStats(state)?.receivedAt ?? null,
+  );
+  const waiting = alerts.isLoading && latestAt == null;
+
   return (
     <Stack gap="md">
-      <Group justify="space-between" align="flex-start">
-        <div>
-          <Title order={2}>Overview</Title>
-          <Text c="dimmed" mt="xs">
-            Live stream panels arrive in T8.3.
-          </Text>
-        </div>
-        <AlertActionStub />
-      </Group>
+      <div>
+        <Title order={2}>Overview</Title>
+        <Text c="dimmed" mt="xs">
+          Live throughput, alerts, and system status.
+        </Text>
+      </div>
+      {waiting ? (
+        <OverviewSkeleton />
+      ) : (
+        <DimLive>
+          <OverviewPanels
+            items={alerts.data?.items ?? []}
+            rules={rules.data ?? []}
+            loading={alerts.isFetching && alerts.data == null}
+            error={alerts.isError}
+          />
+        </DimLive>
+      )}
     </Stack>
   );
 }
+
+function DimLive({ children }: { children: ReactNode }) {
+  const now = useNow(1_000);
+  const stale = useSelector(
+    (state: { stream: StreamState }) => selectStaleSince(state, now) != null,
+  );
+  return <Box opacity={stale ? 0.45 : 1}>{children}</Box>;
+}
+
+const OverviewPanels = memo(function OverviewPanels({
+  items,
+  rules,
+  loading,
+  error,
+}: {
+  items: AlertOut[];
+  rules: RuleOut[];
+  loading: boolean;
+  error: boolean;
+}) {
+  return (
+    <Stack gap="md">
+      <StatTiles />
+      <EventsChart />
+      <SimpleGrid cols={{ base: 1, lg: 2 }}>
+        <AlertsByRuleChart />
+        <SystemGrid />
+      </SimpleGrid>
+      <RecentAlerts items={items} rules={rules} loading={loading} error={error} />
+    </Stack>
+  );
+});

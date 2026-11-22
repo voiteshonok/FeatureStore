@@ -49,6 +49,7 @@ from gateway.models import (
     AlertOut,
     AlertUpdate,
     CatalogEntry,
+    FieldErrorOut,
     LoginBody,
     MeOut,
     ProblemDetails,
@@ -727,7 +728,14 @@ def _apply_contract(schema: dict[str, Any]) -> None:
     components = schema.setdefault("components", {})
     models = components.setdefault("schemas", {})
     models.update(contract.get("components", {}).get("schemas", {}))
-    models["ProblemDetails"] = ProblemDetails.model_json_schema()
+    # Flatten nested $defs so openapi-typescript can resolve FieldErrorOut.
+    models["FieldErrorOut"] = FieldErrorOut.model_json_schema()
+    problem = ProblemDetails.model_json_schema()
+    problem.pop("$defs", None)
+    problem["properties"]["errors"]["items"] = {
+        "$ref": "#/components/schemas/FieldErrorOut",
+    }
+    models["ProblemDetails"] = problem
     components["securitySchemes"] = {
         "ApiKey": {
             "type": "apiKey",

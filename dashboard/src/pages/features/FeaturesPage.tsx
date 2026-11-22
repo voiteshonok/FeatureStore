@@ -1,5 +1,12 @@
-import { PageStub } from "@shared/ui/PageStub";
+import { Text, Title } from "@mantine/core";
 
 export default function FeaturesPage() {
-  return <PageStub title="Features" description="Online feature lookup by entity (T8.5)." />;
+  return (
+    <>
+      <Title order={2}>Features</Title>
+      <Text c="dimmed" mt="sm">
+        Online feature lookup lands in T8.5.
+      </Text>
+    </>
+  );
 }

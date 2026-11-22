@@ -82,5 +82,11 @@ export default tseslint.config(
     ],
     ...tseslint.configs.disableTypeChecked,
   },
+  {
+    files: ["src/**/*.test.{ts,tsx}", "src/test/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": "off",
+    },
+  },
   eslintConfigPrettier,
 );

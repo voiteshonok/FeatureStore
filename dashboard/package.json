@@ -15,11 +15,14 @@
     "gen:api": "openapi-typescript ../docs/openapi/gateway.json -o src/shared/api/schema.d.ts"
   },
   "dependencies": {
+    "@hookform/resolvers": "^7.0.8",
     "@mantine/core": "^7.17.8",
     "@mantine/hooks": "^7.17.8",
+    "@mantine/notifications": "^7.17.8",
     "@reduxjs/toolkit": "^2.8.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-hook-form": "^7.92.0",
     "react-redux": "^9.2.0",
     "react-router-dom": "^6.30.1",
     "zod": "^3.25.76"
@@ -39,6 +42,7 @@
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^16.3.0",
     "jsdom": "^26.1.0",
+    "msw": "^2.15.0",
     "openapi-typescript": "^7.9.1",
     "prettier": "^3.6.2",
     "typescript": "~5.8.3",

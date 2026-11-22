@@ -1,5 +1,12 @@
-import { PageStub } from "@shared/ui/PageStub";
+import { EmptyState } from "@shared/ui/EmptyState";
 
 export default function ForbiddenPage() {
-  return <PageStub title="403 Forbidden" description="You do not have access to this page." />;
+  return (
+    <EmptyState
+      title="403 — Forbidden"
+      description="Your role cannot open this page."
+      actionLabel="Back to overview"
+      actionTo="/"
+    />
+  );
 }

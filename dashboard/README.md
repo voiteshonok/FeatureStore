@@ -19,3 +19,13 @@ npm run dev          # http://localhost:5173, proxies /api → :8080
 
 Built from the repo root via `dashboard/Dockerfile` and served by nginx on port 8081 (`make up`).
 `/api/` is proxied to the gateway; SSE under `/api/v1/stream/` disables buffering.
+
+## Demo login (local seed)
+
+| Email                        | Password            | Role    |
+| ---------------------------- | ------------------- | ------- |
+| `analyst@featurestore.local` | `demo-analyst-pass` | analyst |
+| `viewer@featurestore.local`  | `demo-viewer-pass`  | viewer  |
+| `admin@featurestore.local`   | `demo-admin-pass`   | admin   |
+
+In DEV, `window.__fsPatchAlert(alertId, status)` triggers PATCH for 403 toast checks.

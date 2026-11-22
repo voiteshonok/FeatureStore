@@ -19,6 +19,65 @@ class City(BaseModel):
     lon: float = Field(ge=-180, le=180)
 
 
+class BurstConfig(BaseModel):
+    """Card velocity burst: many payments on one card inside a short window."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: bool = True
+    rate_per_min: float = Field(default=1.0, gt=0)
+    size_min: int = Field(default=8, ge=2)
+    size_max: int = Field(default=15, ge=2)
+    window_s: float = Field(default=60.0, gt=0, le=60)
+
+
+class BadMerchantConfig(BaseModel):
+    """High-decline merchants that receive a share of traffic."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: bool = True
+    count: int = Field(default=5, ge=1)
+    traffic_share: float = Field(default=0.02, gt=0, le=1)
+    decline_rate_min: float = Field(default=0.4, ge=0, le=1)
+    decline_rate_max: float = Field(default=0.6, ge=0, le=1)
+
+
+class TravelConfig(BaseModel):
+    """Impossible-travel pairs (rule stays disabled until geo in snapshots)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: bool = True
+    rate_per_min: float = Field(default=0.2, gt=0)
+    gap_min_s: float = Field(default=60.0, gt=0)
+    gap_max_s: float = Field(default=600.0, gt=0)
+
+
+class AnomaliesConfig(BaseModel):
+    """Optional anomaly scenarios. Off by default so K1/K2 load is unchanged."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: bool = False
+    burst: BurstConfig = Field(default_factory=BurstConfig)
+    bad_merchant: BadMerchantConfig = Field(default_factory=BadMerchantConfig)
+    travel: TravelConfig = Field(default_factory=TravelConfig)
+
+    @model_validator(mode="after")
+    def ranges_fit(self) -> Self:
+        if self.burst.size_min > self.burst.size_max:
+            msg = "burst size_min must be at most size_max"
+            raise ValueError(msg)
+        if self.bad_merchant.decline_rate_min > self.bad_merchant.decline_rate_max:
+            msg = "bad_merchant decline_rate_min must be at most decline_rate_max"
+            raise ValueError(msg)
+        if self.travel.gap_min_s > self.travel.gap_max_s:
+            msg = "travel gap_min_s must be at most gap_max_s"
+            raise ValueError(msg)
+        return self
+
+
 class SimulatorConfig(BaseModel):
     """Traffic profile. Numeric rates come from the YAML file, not from code."""
 
@@ -47,6 +106,7 @@ class SimulatorConfig(BaseModel):
     late_long_max_s: float = Field(gt=0, le=_MAX_LATE_S)
     retry_rate: float = Field(ge=0, le=1)
     cities: tuple[City, ...] = Field(min_length=1)
+    anomalies: AnomaliesConfig = Field(default_factory=AnomaliesConfig)
 
     @model_validator(mode="after")
     def ranges_fit(self) -> Self:
@@ -72,7 +132,16 @@ class SimulatorConfig(BaseModel):
         if self.n_merchants < len(self.cities):
             msg = "each city needs at least one merchant"
             raise ValueError(msg)
+        if self.anomalies.bad_merchant.count > self.n_merchants:
+            msg = "bad_merchant count must be at most n_merchants"
+            raise ValueError(msg)
         return self
+
+    def with_anomalies_enabled(self) -> Self:
+        """Return a copy with ``anomalies.enabled=True`` (CLI ``--anomalies``)."""
+        return self.model_copy(
+            update={"anomalies": self.anomalies.model_copy(update={"enabled": True})}
+        )
 
 
 def load_config(path: Path | None = None) -> SimulatorConfig:

@@ -69,7 +69,11 @@ class Merchant:
 
 
 def build_merchants(config: SimulatorConfig, rng: random.Random) -> tuple[Merchant, ...]:
-    """Draw the merchant list from ``rng`` before the payment stream uses it."""
+    """Draw the merchant list from ``rng`` before the payment stream uses it.
+
+    When anomalies are enabled, a fixed count of merchants get elevated
+    ``decline_rate`` after the normal draw (same ``rng``).
+    """
     spread = (config.decline_rate_max - config.decline_rate_min) / 6
     merchants: list[Merchant] = []
     for index in range(config.n_merchants):
@@ -89,7 +93,47 @@ def build_merchants(config: SimulatorConfig, rng: random.Random) -> tuple[Mercha
                 decline_rate=rate,
             )
         )
+    anomalies = config.anomalies
+    if anomalies.enabled and anomalies.bad_merchant.enabled:
+        bad = anomalies.bad_merchant
+        indexes = _sample_unique_indexes(rng, config.n_merchants, bad.count)
+        for index in indexes:
+            rate = rng.uniform(bad.decline_rate_min, bad.decline_rate_max)
+            merchants[index] = Merchant(
+                merchant_id=merchants[index].merchant_id,
+                city_index=merchants[index].city_index,
+                lat=merchants[index].lat,
+                lon=merchants[index].lon,
+                decline_rate=rate,
+            )
     return tuple(merchants)
+
+
+def bad_merchant_indexes(
+    config: SimulatorConfig, merchants: tuple[Merchant, ...]
+) -> tuple[int, ...]:
+    """Indexes of elevated-decline merchants (normal max is below the bad band)."""
+    bad = config.anomalies.bad_merchant
+    if not (config.anomalies.enabled and bad.enabled):
+        return ()
+    return tuple(
+        index
+        for index, merchant in enumerate(merchants)
+        if merchant.decline_rate >= bad.decline_rate_min
+    )
+
+
+def _sample_unique_indexes(rng: random.Random, n: int, k: int) -> list[int]:
+    """Sample ``k`` distinct indexes in ``0 .. n-1`` without ``random.sample`` reshuffle quirks."""
+    if k > n:
+        msg = "cannot sample more indexes than n"
+        raise ValueError(msg)
+    chosen: list[int] = []
+    pool = list(range(n))
+    for _ in range(k):
+        pick = rng.randrange(len(pool))
+        chosen.append(pool.pop(pick))
+    return chosen
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

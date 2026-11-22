@@ -13,6 +13,8 @@ type AlertDetail =
 type AlertOut = components["schemas"]["AlertOut"];
 type AlertList = components["schemas"]["AlertListOut"];
 type RuleOut = components["schemas"]["RuleOut"];
+type FeatureRequest = components["schemas"]["FeatureRequest"];
+type FeatureResponse = components["schemas"]["FeatureResponse"];
 
 export type AlertsListArgs = NonNullable<paths["/v1/alerts"]["get"]["parameters"]["query"]>;
 
@@ -28,6 +30,13 @@ export const baseApi = createApi({
     getCatalog: build.query<CatalogResponse, undefined>({
       query: () => "/catalog",
       providesTags: ["Catalog"],
+    }),
+    lookupFeatures: build.mutation<FeatureResponse, FeatureRequest>({
+      query: (body) => ({
+        url: "/features",
+        method: "POST",
+        body,
+      }),
     }),
     getAlerts: build.query<AlertList, AlertsListArgs>({
       query: (args) => ({
@@ -108,6 +117,7 @@ export const baseApi = createApi({
 
 export const {
   useGetCatalogQuery,
+  useLookupFeaturesMutation,
   useGetAlertsQuery,
   useGetRulesQuery,
   useGetAlertQuery,

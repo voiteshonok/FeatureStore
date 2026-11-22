@@ -1,5 +1,6 @@
 import { configureStore } from "@reduxjs/toolkit";
 
+import { featureLookupReducer } from "@features/feature-lookup/model/featureLookupSlice";
 import { sessionReducer } from "@features/session";
 import { streamReducer } from "@features/stream";
 import { createStreamListenerMiddleware } from "@features/stream/model/streamListener";
@@ -11,6 +12,7 @@ export function createAppStore() {
     reducer: {
       session: sessionReducer,
       stream: streamReducer,
+      featureLookup: featureLookupReducer,
       [baseApi.reducerPath]: baseApi.reducer,
     },
     middleware: (getDefaultMiddleware) =>

@@ -1,5 +1,12 @@
 import { createTheme, type MantineColorsTuple } from "@mantine/core";
 
+const coarseTarget = {
+  "@media (pointer: coarse)": {
+    minHeight: "2.75rem",
+    minWidth: "2.75rem",
+  },
+};
+
 const brand: MantineColorsTuple = [
   "#e8f1ff",
   "#d0e0ff",
@@ -22,6 +29,10 @@ export const appTheme = createTheme({
     fontWeight: "600",
   },
   defaultRadius: "sm",
+  breakpoints: {
+    sm: "48em",
+    lg: "80em",
+  },
   spacing: {
     xs: "0.5rem",
     sm: "0.75rem",
@@ -30,6 +41,11 @@ export const appTheme = createTheme({
     xl: "2rem",
   },
   other: {
-    layoutMaxWidth: 1280,
+    layoutMaxWidth: "80rem",
+  },
+  components: {
+    Button: { styles: { root: coarseTarget } },
+    NavLink: { styles: { root: coarseTarget } },
+    Menu: { styles: { item: coarseTarget } },
   },
 });

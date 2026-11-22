@@ -1,4 +1,4 @@
-import { Paper, SimpleGrid, Stack, Text } from "@mantine/core";
+import { Grid, Paper, Stack, Text } from "@mantine/core";
 import { Sparkline } from "@mantine/charts";
 import { useSelector } from "react-redux";
 
@@ -11,29 +11,37 @@ export function StatTiles() {
   const sparks = useSelector((state: { stream: StreamState }) => selectStatSparklines(state));
   const alerts60s = latest ? alertsInWindow(latest.alerts_60s_by_rule) : null;
 
+  const tiles = [
+    {
+      label: "Events/s",
+      value: latest ? formatRate(latest.events_per_s) : "—",
+      series: sparks.eventsPerS,
+    },
+    {
+      label: "Alerts (60s)",
+      value: alerts60s == null ? "—" : formatCount(alerts60s),
+      series: sparks.alerts60s,
+    },
+    {
+      label: "p95 latency",
+      value: formatLatency(latest?.latency_p95_ms),
+      series: sparks.latencyP95,
+    },
+    {
+      label: "Active cards",
+      value: latest ? formatCount(latest.active_cards_60s) : "—",
+      series: sparks.activeCards,
+    },
+  ];
+
   return (
-    <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }}>
-      <Tile
-        label="Events/s"
-        value={latest ? formatRate(latest.events_per_s) : "—"}
-        series={sparks.eventsPerS}
-      />
-      <Tile
-        label="Alerts (60s)"
-        value={alerts60s == null ? "—" : formatCount(alerts60s)}
-        series={sparks.alerts60s}
-      />
-      <Tile
-        label="p95 latency"
-        value={formatLatency(latest?.latency_p95_ms)}
-        series={sparks.latencyP95}
-      />
-      <Tile
-        label="Active cards"
-        value={latest ? formatCount(latest.active_cards_60s) : "—"}
-        series={sparks.activeCards}
-      />
-    </SimpleGrid>
+    <Grid>
+      {tiles.map((tile) => (
+        <Grid.Col key={tile.label} span={{ base: 6, lg: 3 }}>
+          <Tile label={tile.label} value={tile.value} series={tile.series} />
+        </Grid.Col>
+      ))}
+    </Grid>
   );
 }
 

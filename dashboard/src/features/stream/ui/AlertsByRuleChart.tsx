@@ -1,11 +1,16 @@
-import { Paper, Stack, Text, Title } from "@mantine/core";
+import { Paper, Stack, Text, Title, useMantineTheme } from "@mantine/core";
 import { BarChart } from "@mantine/charts";
+import { useMediaQuery } from "@mantine/hooks";
 import { useSelector } from "react-redux";
 
 import { selectAlertsByRule } from "../model/streamSelectors";
 import type { StreamState } from "../model/streamSlice";
 
 export function AlertsByRuleChart() {
+  const theme = useMantineTheme();
+  const phone = useMediaQuery(`(max-width: ${theme.breakpoints.sm})`, false, {
+    getInitialValueInEffect: false,
+  });
   const rows = useSelector((state: { stream: StreamState }) => selectAlertsByRule(state));
 
   return (
@@ -25,7 +30,7 @@ export function AlertsByRuleChart() {
             series={[{ name: "count", label: "Alerts", color: "brand.6" }]}
             withBarValueLabel
             gridAxis="none"
-            yAxisProps={{ width: 160 }}
+            yAxisProps={{ width: phone ? 72 : 112 }}
           />
         )}
       </Stack>

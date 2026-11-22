@@ -1,16 +1,17 @@
-import { SimpleGrid, Skeleton, Stack } from "@mantine/core";
+import { Grid, Skeleton, Stack } from "@mantine/core";
 
 export function OverviewSkeleton() {
   return (
     <Stack gap="md" aria-busy="true" aria-label="Loading overview">
-      <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }}>
-        <Skeleton height={72} radius="sm" />
-        <Skeleton height={72} radius="sm" />
-        <Skeleton height={72} radius="sm" />
-        <Skeleton height={72} radius="sm" />
-      </SimpleGrid>
-      <Skeleton height={200} radius="sm" />
-      <Skeleton height={160} radius="sm" />
+      <Grid>
+        {["a", "b", "c", "d"].map((key) => (
+          <Grid.Col key={key} span={{ base: 6, lg: 3 }}>
+            <Skeleton height="4.5rem" radius="sm" />
+          </Grid.Col>
+        ))}
+      </Grid>
+      <Skeleton height="12rem" radius="sm" />
+      <Skeleton height="10rem" radius="sm" />
     </Stack>
   );
 }

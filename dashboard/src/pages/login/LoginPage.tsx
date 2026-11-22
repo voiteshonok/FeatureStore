@@ -61,7 +61,7 @@ export default function LoginPage() {
   });
 
   return (
-    <Stack maw={400} mx="auto" mt="xl" gap="md">
+    <Stack maw="25rem" mx="auto" mt="xl" gap="md">
       <Title order={2}>Sign in</Title>
       <form
         onSubmit={(event) => {

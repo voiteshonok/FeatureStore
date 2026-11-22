@@ -1,12 +1,18 @@
-import { Button, Group, MultiSelect, SegmentedControl, Select, TextInput } from "@mantine/core";
+import {
+  Button,
+  Drawer,
+  SimpleGrid,
+  SegmentedControl,
+  Select,
+  MultiSelect,
+  Stack,
+  TextInput,
+} from "@mantine/core";
+import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 
 import type { components } from "@shared/api/schema";
 
-import {
-  type AlertsFilter,
-  type EntityType,
-  type PeriodPreset,
-} from "../model/filters";
+import { type AlertsFilter, type EntityType, type PeriodPreset } from "../model/filters";
 
 type RuleOut = components["schemas"]["RuleOut"];
 
@@ -27,82 +33,95 @@ const PERIODS = [
   { label: "Custom", value: "custom" },
 ];
 
-export function AlertFilters({
-  filter,
-  rules,
-  search,
-  onSearch,
-  onChange,
-  onReset,
-}: AlertFiltersProps) {
+export function AlertFilters(props: AlertFiltersProps) {
+  const [opened, { open, close }] = useDisclosure(false);
+  const phone = useMediaQuery("(max-width: 47.99em)", false, {
+    getInitialValueInEffect: false,
+  });
+  const fields = <FilterFields {...props} />;
+
+  if (!phone) {
+    return fields;
+  }
+
   return (
-    <Group align="flex-end" gap="sm" wrap="wrap">
-      <MultiSelect
-        label="Status"
-        data={[
-          { value: "open", label: "Open" },
-          { value: "acknowledged", label: "Acknowledged" },
-          { value: "resolved", label: "Resolved" },
-        ]}
-        value={filter.statuses}
-        onChange={(statuses) => {
-          onChange({ ...filter, statuses: statuses as AlertsFilter["statuses"] });
-        }}
-        placeholder="Any"
-        clearable
-        w="14rem"
-      />
-      <Select
-        label="Rule"
-        data={rules.map((rule) => ({ value: rule.rule_id, label: rule.name }))}
-        value={filter.ruleId}
-        onChange={(ruleId) => {
-          onChange({ ...filter, ruleId });
-        }}
-        placeholder="Any"
-        clearable
-        searchable
-        w="16rem"
-      />
-      <Select
-        label="Entity"
-        data={[
-          { value: "card", label: "Card" },
-          { value: "merchant", label: "Merchant" },
-        ]}
-        value={filter.entityType}
-        onChange={(entityType) => {
-          onChange({ ...filter, entityType: entityType as EntityType | null });
-        }}
-        placeholder="Any"
-        clearable
-        w="10rem"
-      />
-      <Select
-        label="Sort"
-        data={[
-          { value: "-created_at", label: "Newest first" },
-          { value: "created_at", label: "Oldest first" },
-        ]}
-        value={filter.sort}
-        onChange={(sort) => {
-          if (sort === "created_at" || sort === "-created_at") {
-            onChange({ ...filter, sort });
-          }
-        }}
-        allowDeselect={false}
-        w="12rem"
-      />
-      <TextInput
-        label="Search"
-        description="Prefix of a loaded token or merchant"
-        value={search}
-        onChange={(event) => {
-          onSearch(event.currentTarget.value);
-        }}
-        placeholder="ab12 or merchant"
-        w="16rem"
-      />
+    <>
+      <Button variant="default" onClick={open}>
+        Filters
+      </Button>
+      <Drawer opened={opened} onClose={close} title="Filters" position="right" size="100%">
+        {fields}
+      </Drawer>
+    </>
+  );
+}
+
+function FilterFields({ filter, rules, search, onSearch, onChange, onReset }: AlertFiltersProps) {
+  return (
+    <Stack gap="sm">
+      <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
+        <MultiSelect
+          label="Status"
+          data={[
+            { value: "open", label: "Open" },
+            { value: "acknowledged", label: "Acknowledged" },
+            { value: "resolved", label: "Resolved" },
+          ]}
+          value={filter.statuses}
+          onChange={(statuses) => {
+            onChange({ ...filter, statuses: statuses as AlertsFilter["statuses"] });
+          }}
+          placeholder="Any"
+          clearable
+        />
+        <Select
+          label="Rule"
+          data={rules.map((rule) => ({ value: rule.rule_id, label: rule.name }))}
+          value={filter.ruleId}
+          onChange={(ruleId) => {
+            onChange({ ...filter, ruleId });
+          }}
+          placeholder="Any"
+          clearable
+          searchable
+        />
+        <Select
+          label="Entity"
+          data={[
+            { value: "card", label: "Card" },
+            { value: "merchant", label: "Merchant" },
+          ]}
+          value={filter.entityType}
+          onChange={(entityType) => {
+            onChange({ ...filter, entityType: entityType as EntityType | null });
+          }}
+          placeholder="Any"
+          clearable
+        />
+        <Select
+          label="Sort"
+          data={[
+            { value: "-created_at", label: "Newest first" },
+            { value: "created_at", label: "Oldest first" },
+          ]}
+          value={filter.sort}
+          onChange={(sort) => {
+            if (sort === "created_at" || sort === "-created_at") {
+              onChange({ ...filter, sort });
+            }
+          }}
+          allowDeselect={false}
+        />
+        <TextInput
+          label="Search"
+          description="Prefix of a loaded token or merchant"
+          value={search}
+          onChange={(event) => {
+            onSearch(event.currentTarget.value);
+          }}
+          placeholder="ab12 or merchant"
+        />
+      </SimpleGrid>
       <SegmentedControl
         value={filter.preset ?? "all"}
         onChange={(value) => {
@@ -117,7 +136,7 @@ export function AlertFilters({
         data={PERIODS}
       />
       {filter.preset === "custom" ? (
-        <>
+        <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <TextInput
             label="From"
             type="datetime-local"
@@ -134,12 +153,12 @@ export function AlertFilters({
               onChange({ ...filter, to: fromLocalInput(event.currentTarget.value) });
             }}
           />
-        </>
+        </SimpleGrid>
       ) : null}
       <Button variant="default" onClick={onReset}>
         Reset
       </Button>
-    </Group>
+    </Stack>
   );
 }
 

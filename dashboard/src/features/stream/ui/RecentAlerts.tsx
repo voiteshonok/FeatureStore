@@ -10,6 +10,8 @@ import { formatClock } from "../model/format";
 import { selectHighlightedAlertIds, selectRuleNames } from "../model/streamSelectors";
 import type { StreamState } from "../model/streamSlice";
 
+import classes from "./RecentAlerts.module.css";
+
 type AlertOut = components["schemas"]["AlertOut"];
 type RuleOut = components["schemas"]["RuleOut"];
 
@@ -54,8 +56,8 @@ export function RecentAlerts({ items, rules, loading, error }: RecentAlertsProps
                 c="inherit"
                 bg={isNew ? "yellow.1" : undefined}
               >
-                <Group justify="space-between" wrap="nowrap" gap="sm">
-                  <Stack gap={2}>
+                <Group justify="space-between" wrap="wrap" gap="sm">
+                  <Stack gap={2} miw="0">
                     <Group gap="xs">
                       <Text fw={600}>{ruleLabel(item.rule_id, ruleNames, rules)}</Text>
                       {isNew ? (
@@ -64,7 +66,7 @@ export function RecentAlerts({ items, rules, loading, error }: RecentAlertsProps
                         </Badge>
                       ) : null}
                     </Group>
-                    <Text size="sm" c="dimmed">
+                    <Text className={classes.token} size="sm" c="dimmed">
                       {entityLabel(item)}
                     </Text>
                   </Stack>

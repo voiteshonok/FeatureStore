@@ -26,7 +26,7 @@ export function AlertRows({ items, ruleName, nextCursor, loadingMore, onMore }: 
             <Table.Th>Rule</Table.Th>
             <Table.Th>Entity</Table.Th>
             <Table.Th>Status</Table.Th>
-            <Table.Th>Changed</Table.Th>
+            <Table.Th visibleFrom="lg">Changed</Table.Th>
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
@@ -44,7 +44,7 @@ export function AlertRows({ items, ruleName, nextCursor, loadingMore, onMore }: 
                 <Table.Td>
                   <StatusBadge status={item.status} />
                 </Table.Td>
-                <Table.Td>
+                <Table.Td visibleFrom="lg">
                   {changed ? `${changed.who} · ${formatClock(changed.when)}` : "—"}
                 </Table.Td>
               </Table.Tr>

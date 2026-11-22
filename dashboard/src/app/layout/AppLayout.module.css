@@ -1,0 +1,44 @@
+.account {
+  max-width: 8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.iconOnly {
+  justify-content: center;
+}
+
+.iconOnly :global(.mantine-NavLink-section) {
+  margin-inline-end: 0;
+}
+
+.tabs {
+  display: flex;
+  height: 100%;
+}
+
+.tab {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 2.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.125rem;
+  padding: 0.25rem;
+  text-decoration: none;
+  color: inherit;
+  font-size: var(--mantine-font-size-xs);
+}
+
+.tabActive {
+  color: var(--mantine-color-brand-filled);
+}
+
+@media (min-width: 48em) {
+  .tabs {
+    display: none;
+  }
+}

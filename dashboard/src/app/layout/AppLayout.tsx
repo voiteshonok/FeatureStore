@@ -1,39 +1,39 @@
 import {
   AppShell,
-  Burger,
   Button,
   Group,
   Menu,
   NavLink,
   Text,
   useMantineColorScheme,
+  useMantineTheme,
 } from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
+import { useMediaQuery } from "@mantine/hooks";
+import { IconBell, IconLayoutDashboard, IconSearch } from "@tabler/icons-react";
 import { useSelector } from "react-redux";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { ErrorBoundary } from "@app/ErrorBoundary";
 import { ColorSchemeToggle } from "@app/layout/ColorSchemeToggle";
 import { StaleBanner } from "@features/stream/ui/StaleBanner";
-import {
-  selectIsAuthenticated,
-  selectSessionStatus,
-  useLogoutMutation,
-  type SessionState,
-} from "@features/session";
+import { selectIsAuthenticated, useLogoutMutation, type SessionState } from "@features/session";
+
+import classes from "./AppLayout.module.css";
 
 const NAV = [
-  { to: "/", label: "Overview" },
-  { to: "/alerts", label: "Alerts" },
-  { to: "/features", label: "Features" },
+  { to: "/", label: "Overview", icon: IconLayoutDashboard },
+  { to: "/alerts", label: "Alerts", icon: IconBell },
+  { to: "/features", label: "Features", icon: IconSearch },
 ] as const;
 
 export function AppLayout() {
-  const [opened, { toggle }] = useDisclosure();
   const location = useLocation();
   const navigate = useNavigate();
+  const theme = useMantineTheme();
+  const wide = useMediaQuery(`(min-width: ${theme.breakpoints.lg})`, false, {
+    getInitialValueInEffect: false,
+  });
   const { colorScheme } = useMantineColorScheme();
-  const status = useSelector((state: { session: SessionState }) => selectSessionStatus(state));
   const authenticated = useSelector((state: { session: SessionState }) =>
     selectIsAuthenticated(state),
   );
@@ -51,43 +51,32 @@ export function AppLayout() {
 
   return (
     <AppShell
-      header={{ height: 56 }}
+      header={{ height: "3.5rem" }}
       navbar={{
-        width: 220,
+        width: { sm: "4.5rem", lg: "16rem" },
         breakpoint: "sm",
-        collapsed: { mobile: !opened || status === "anonymous" },
+        collapsed: { mobile: true, desktop: !authenticated },
+      }}
+      footer={{
+        height: { base: "4.5rem", sm: 0 },
+        collapsed: !authenticated,
       }}
       padding="md"
     >
       <AppShell.Header>
-        <Group h="100%" px="md" justify="space-between">
-          <Group>
-            <Burger
-              opened={opened}
-              onClick={toggle}
-              hiddenFrom="sm"
-              size="sm"
-              aria-label="Menu"
-              disabled={!authenticated}
-            />
-            <Text
-              fw={700}
-              component={Link}
-              to={authenticated ? "/" : "/login"}
-              style={{ textDecoration: "none", color: "inherit" }}
-            >
-              FeatureStore
-            </Text>
-          </Group>
-          <Group gap="sm">
-            <Text size="sm" c="dimmed">
+        <Group h="100%" px="md" justify="space-between" wrap="nowrap">
+          <Text fw={700} component={Link} to={authenticated ? "/" : "/login"} td="none" c="inherit">
+            FeatureStore
+          </Text>
+          <Group gap="sm" wrap="nowrap">
+            <Text size="sm" c="dimmed" visibleFrom="sm">
               {colorScheme}
             </Text>
             <ColorSchemeToggle />
             {authenticated ? (
-              <Menu shadow="md" width={220}>
+              <Menu shadow="md" width="16rem">
                 <Menu.Target>
-                  <Button variant="default" size="compact-sm">
+                  <Button variant="default" size="compact-sm" className={classes.account}>
                     {session.email}
                   </Button>
                 </Menu.Target>
@@ -104,21 +93,46 @@ export function AppLayout() {
       </AppShell.Header>
 
       {authenticated ? (
-        <AppShell.Navbar p="md">
-          {NAV.map((item) => (
-            <NavLink
-              key={item.to}
-              component={Link}
-              to={item.to}
-              label={item.label}
-              active={
-                item.to === "/"
-                  ? location.pathname === "/"
-                  : location.pathname === item.to || location.pathname.startsWith(`${item.to}/`)
-              }
-            />
-          ))}
+        <AppShell.Navbar p="xs">
+          {NAV.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.to, location.pathname);
+            return (
+              <NavLink
+                key={item.to}
+                className={wide ? undefined : classes.iconOnly}
+                component={Link}
+                to={item.to}
+                label={wide ? item.label : undefined}
+                aria-label={wide ? undefined : item.label}
+                leftSection={<Icon size={20} />}
+                active={active}
+              />
+            );
+          })}
         </AppShell.Navbar>
+      ) : null}
+
+      {authenticated ? (
+        <AppShell.Footer>
+          <nav className={classes.tabs} aria-label="Primary">
+            {NAV.map((item) => {
+              const Icon = item.icon;
+              const active = isActive(item.to, location.pathname);
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={active ? `${classes.tab} ${classes.tabActive}` : classes.tab}
+                  aria-current={active ? "page" : undefined}
+                >
+                  <Icon size={20} aria-hidden />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+        </AppShell.Footer>
       ) : null}
 
       <AppShell.Main>
@@ -129,4 +143,11 @@ export function AppLayout() {
       </AppShell.Main>
     </AppShell>
   );
+}
+
+function isActive(to: string, pathname: string): boolean {
+  if (to === "/") {
+    return pathname === "/";
+  }
+  return pathname === to || pathname.startsWith(`${to}/`);
 }

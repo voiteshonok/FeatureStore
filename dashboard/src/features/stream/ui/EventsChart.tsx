@@ -1,5 +1,6 @@
-import { Paper, Stack, Text, Title } from "@mantine/core";
+import { Paper, Stack, Text, Title, useMantineTheme } from "@mantine/core";
 import { LineChart } from "@mantine/charts";
+import { useMediaQuery } from "@mantine/hooks";
 import { useSelector } from "react-redux";
 
 import { formatRate } from "../model/format";
@@ -7,6 +8,10 @@ import { selectEventsSeries, selectLatestStats } from "../model/streamSelectors"
 import type { StreamState } from "../model/streamSlice";
 
 export function EventsChart() {
+  const theme = useMantineTheme();
+  const phone = useMediaQuery(`(max-width: ${theme.breakpoints.sm})`, false, {
+    getInitialValueInEffect: false,
+  });
   const series = useSelector((state: { stream: StreamState }) => selectEventsSeries(state));
   const latest = useSelector((state: { stream: StreamState }) => selectLatestStats(state));
   const summary = latest
@@ -30,7 +35,7 @@ export function EventsChart() {
             withDots={false}
             strokeWidth={2}
             gridAxis="xy"
-            xAxisProps={{ minTickGap: 48 }}
+            xAxisProps={{ minTickGap: phone ? 96 : 48 }}
             valueFormatter={(value) => formatRate(value)}
           />
         )}

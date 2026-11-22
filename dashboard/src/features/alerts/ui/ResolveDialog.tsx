@@ -1,9 +1,11 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Alert, Button, Group, Modal, Select, Stack, Text, Textarea } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
+import classes from "./ResolveDialog.module.css";
 import {
   RESOLVE_OUTCOMES,
   commentLimit,
@@ -43,6 +45,9 @@ export function ResolveDialog({
   onClose,
   onResolve,
 }: ResolveDialogProps) {
+  const phone = useMediaQuery("(max-width: 47.99em)", false, {
+    getInitialValueInEffect: false,
+  });
   const stale = baselineStatus != null && liveStatus !== baselineStatus;
   const {
     register,
@@ -67,7 +72,13 @@ export function ResolveDialog({
   }, [opened, reset]);
 
   return (
-    <Modal opened={opened} onClose={onClose} title="Resolve alert" fullScreen={false}>
+    <Modal
+      opened={opened}
+      onClose={onClose}
+      title="Resolve alert"
+      fullScreen={phone}
+      classNames={phone ? { content: classes.sheet, body: classes.body } : undefined}
+    >
       <form
         onSubmit={(event) => {
           void handleSubmit((values) => {

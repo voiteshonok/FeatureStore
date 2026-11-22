@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Badge, Button, Group, Stack, Table, Text, Title } from "@mantine/core";
+import { useSelector } from "react-redux";
 import { Link, useParams } from "react-router-dom";
 
 import { selectCanChangeAlerts, type SessionState } from "@features/session";
@@ -12,7 +13,8 @@ import type { ApiFailure } from "@shared/api/problem";
 import { notify } from "@shared/lib/notify";
 import { CardSkeleton } from "@shared/ui/CardSkeleton";
 import { EmptyState } from "@shared/ui/EmptyState";
-import { useSelector } from "react-redux";
+
+import classes from "./AlertDetailPage.module.css";
 
 function asFailure(error: unknown): ApiFailure | null {
   if (!error || typeof error !== "object" || !("status" in error)) {
@@ -122,8 +124,8 @@ export default function AlertDetailPage() {
           </Group>
         ) : null}
       </Group>
-      <Group gap="xs">
-        <Text ff="monospace" size="sm">
+      <Group gap="xs" wrap="wrap">
+        <Text className={classes.token} ff="monospace" size="sm" miw="0">
           {entityLabel(alert, false)}
         </Text>
         {subject ? (

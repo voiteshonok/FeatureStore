@@ -1,6 +1,6 @@
 import { memo, type ReactNode } from "react";
 
-import { Box, SimpleGrid, Stack, Text, Title } from "@mantine/core";
+import { Box, Grid, Stack, Text, Title } from "@mantine/core";
 import { useSelector } from "react-redux";
 
 import { OVERVIEW_ALERTS_QUERY } from "@features/stream/model/overviewQuery";
@@ -75,12 +75,20 @@ const OverviewPanels = memo(function OverviewPanels({
   return (
     <Stack gap="md">
       <StatTiles />
-      <EventsChart />
-      <SimpleGrid cols={{ base: 1, lg: 2 }}>
-        <AlertsByRuleChart />
-        <SystemGrid />
-      </SimpleGrid>
-      <RecentAlerts items={items} rules={rules} loading={loading} error={error} />
+      <Grid>
+        <Grid.Col span={{ base: 12, lg: 8 }}>
+          <EventsChart />
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, sm: 6, lg: 4 }}>
+          <AlertsByRuleChart />
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, sm: 6 }}>
+          <SystemGrid />
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, lg: 6 }}>
+          <RecentAlerts items={items} rules={rules} loading={loading} error={error} />
+        </Grid.Col>
+      </Grid>
     </Stack>
   );
 });

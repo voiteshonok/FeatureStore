@@ -102,7 +102,7 @@ type ConnectCtx = {
   unregisterTimer: (timer: ReturnType<typeof setTimeout>) => void;
 };
 
-function connectLiveStreams(ctx: ConnectCtx): Promise<void> {
+export function connectLiveStreams(ctx: ConnectCtx): Promise<void> {
   let lastAlertId: string | null = null;
   const alerts = runSseStream({
     url: "/api/v1/stream/alerts",

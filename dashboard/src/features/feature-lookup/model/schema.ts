@@ -34,13 +34,13 @@ export function lookupSchema(now = Date.now()) {
       if (value.cardToken.length > 0) {
         if (PAN.test(value.cardToken)) {
           ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: "custom",
             path: ["cardToken"],
             message: "A token is required, not a card number",
           });
         } else if (!HEX_64.test(value.cardToken)) {
           ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: "custom",
             path: ["cardToken"],
             message: "Token must be 64 hex characters",
           });
@@ -48,21 +48,21 @@ export function lookupSchema(now = Date.now()) {
       }
       if (value.merchantId.length > 64) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           path: ["merchantId"],
           message: "At most 64 characters",
         });
       }
       if (value.cardToken.length === 0 && value.merchantId.length === 0) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           path: ["cardToken"],
           message: "Enter a card token or a merchant id",
         });
       }
       if (!value.ts) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           path: ["ts"],
           message: "Time is required",
         });
@@ -71,7 +71,7 @@ export function lookupSchema(now = Date.now()) {
       const ts = new Date(value.ts);
       if (Number.isNaN(ts.getTime())) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           path: ["ts"],
           message: "Time is invalid",
         });
@@ -79,13 +79,13 @@ export function lookupSchema(now = Date.now()) {
       }
       if (ts.getTime() > now + FUTURE_MS) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           path: ["ts"],
           message: "Time must not be more than 5 seconds ahead",
         });
       } else if (ts.getTime() < now - DAY_MS) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           path: ["ts"],
           message: "Time must not be older than 24 hours",
         });

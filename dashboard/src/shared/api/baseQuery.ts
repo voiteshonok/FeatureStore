@@ -42,7 +42,20 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
-function toFailure(error: FetchBaseQueryError): ApiFailure {
+function retryAfterSeconds(meta: unknown): number | undefined {
+  if (!meta || typeof meta !== "object" || !("response" in meta)) {
+    return undefined;
+  }
+  const response = (meta as { response?: Response }).response;
+  const header = response?.headers.get("Retry-After");
+  if (!header) {
+    return undefined;
+  }
+  const seconds = Number.parseInt(header, 10);
+  return Number.isFinite(seconds) ? seconds : undefined;
+}
+
+function toFailure(error: FetchBaseQueryError, meta?: unknown): ApiFailure {
   if (
     error.status === "FETCH_ERROR" ||
     error.status === "PARSING_ERROR" ||
@@ -52,18 +65,13 @@ function toFailure(error: FetchBaseQueryError): ApiFailure {
   }
   if (typeof error.status === "number") {
     const problem = parseProblem(error.data);
-    const response =
-      "meta" in error && error.meta && typeof error.meta === "object"
-        ? (error.meta as { response?: Response }).response
-        : undefined;
-    const retryAfter = response?.headers.get("Retry-After");
     return {
       status: error.status,
       type: problem?.type,
       title: problem?.title,
       requestId: problem?.request_id,
       fieldErrors: problem?.errors,
-      retryAfterSec: retryAfter ? Number.parseInt(retryAfter, 10) : undefined,
+      retryAfterSec: retryAfterSeconds(meta),
       raw: error.data,
     };
   }
@@ -89,6 +97,7 @@ export const baseQueryWithErrors: BaseQueryFn<
   const silent = options.silent === true;
   const maxAttempts = isGetRequest(args) ? 3 : 1;
   let lastError: FetchBaseQueryError | undefined;
+  let lastMeta: unknown;
   const rawBaseQuery = createRawBaseQuery();
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -97,6 +106,7 @@ export const baseQueryWithErrors: BaseQueryFn<
       return { data: result.data };
     }
     lastError = result.error;
+    lastMeta = result.meta;
     const status = lastError?.status;
     const retryable =
       typeof status === "number"
@@ -112,7 +122,7 @@ export const baseQueryWithErrors: BaseQueryFn<
     return { error: { status: "CUSTOM_ERROR" } };
   }
 
-  const failure = toFailure(lastError);
+  const failure = toFailure(lastError, lastMeta);
   const loginCall = isLoginRequest(args);
 
   if (failure.status === 401) {

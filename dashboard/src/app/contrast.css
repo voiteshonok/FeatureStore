@@ -1,5 +1,12 @@
 :root[data-mantine-color-scheme="light"] {
   --mantine-color-dimmed: var(--mantine-color-gray-7) !important;
+  --mantine-color-green-light-color: #0f5132 !important;
+  --mantine-color-red-light-color: #842029 !important;
+  --mantine-color-yellow-light-color: #5c4827 !important;
+  --mantine-color-orange-light-color: #7a3e00 !important;
+  --mantine-color-brand-light-color: #003bb4 !important;
+  --mantine-color-blue-light-color: #0b3d91 !important;
+  --mantine-color-gray-light-color: #212529 !important;
 }
 
 :root[data-mantine-color-scheme="dark"] {

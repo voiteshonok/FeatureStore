@@ -45,7 +45,16 @@ export const appTheme = createTheme({
   },
   components: {
     Button: { styles: { root: coarseTarget } },
-    NavLink: { styles: { root: coarseTarget } },
+    NavLink: {
+      styles: {
+        root: {
+          ...coarseTarget,
+          "&[data-active]": {
+            color: "var(--mantine-color-brand-9)",
+          },
+        },
+      },
+    },
     Menu: { styles: { item: coarseTarget } },
   },
 });

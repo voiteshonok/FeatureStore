@@ -52,7 +52,7 @@
 }
 
 .tabActive {
-  color: var(--mantine-color-brand-filled);
+  color: var(--mantine-color-brand-9);
 }
 
 .tab:focus-visible {

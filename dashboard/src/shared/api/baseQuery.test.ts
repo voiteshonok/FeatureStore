@@ -107,4 +107,107 @@ describe("baseQueryWithErrors", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(notify).toHaveBeenCalledWith("Service unavailable (request_id: r3)");
   });
+
+  it("toasts on 404 and 500", async () => {
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ type: "not_found", title: "missing", status: 404, request_id: "r4" }),
+          { status: 404, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+    await baseQueryWithErrors("/alerts/missing", apiCtx(), {});
+    expect(notify).toHaveBeenCalledWith("Not found");
+
+    notify.mockReset();
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          type: "internal_error",
+          title: "boom",
+          status: 500,
+          request_id: "r5",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    await baseQueryWithErrors(
+      { url: "/alerts/x", method: "PATCH", body: { status: "acknowledged" } },
+      { ...apiCtx(), type: "mutation" },
+      {},
+    );
+    expect(notify).toHaveBeenCalledWith("Service unavailable (request_id: r5)");
+  });
+
+  it("returns 422 without a toast", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          type: "validation_error",
+          title: "invalid",
+          status: 422,
+          request_id: "r6",
+          errors: [{ field: "card_token", message: "required" }],
+        }),
+        { status: 422, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    const result = await baseQueryWithErrors(
+      { url: "/features", method: "POST", body: {} },
+      { ...apiCtx(), type: "mutation" },
+      {},
+    );
+    expect(result.error?.status).toBe(422);
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it("toasts a retry delay on 429", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          type: "rate_limited",
+          title: "slow down",
+          status: 429,
+          request_id: "r7",
+        }),
+        { status: 429, headers: { "Content-Type": "application/json", "Retry-After": "3" } },
+      ),
+    );
+    await baseQueryWithErrors(
+      { url: "/auth/login", method: "POST", body: {} },
+      { ...apiCtx(), type: "mutation" },
+      {},
+    );
+    expect(notify).toHaveBeenCalledWith("Too many requests. Try again in 3s", "warning");
+  });
+
+  it("toasts on 409 unless the caller silences it", async () => {
+    const conflict = () =>
+      new Response(
+        JSON.stringify({
+          type: "conflict",
+          title: "changed",
+          status: 409,
+          request_id: "r8",
+        }),
+        { status: 409, headers: { "Content-Type": "application/json" } },
+      );
+    globalThis.fetch = vi.fn().mockResolvedValue(conflict());
+    await baseQueryWithErrors(
+      { url: "/alerts/x", method: "PATCH", body: { status: "acknowledged" } },
+      { ...apiCtx(), type: "mutation" },
+      {},
+    );
+    expect(notify).toHaveBeenCalledWith("Conflict — refresh and try again", "warning");
+
+    notify.mockReset();
+    globalThis.fetch = vi.fn().mockResolvedValue(conflict());
+    await baseQueryWithErrors(
+      { url: "/alerts/x", method: "PATCH", body: { status: "acknowledged" } },
+      { ...apiCtx(), type: "mutation" },
+      { silentStatuses: [409] },
+    );
+    expect(notify).not.toHaveBeenCalled();
+  });
 });

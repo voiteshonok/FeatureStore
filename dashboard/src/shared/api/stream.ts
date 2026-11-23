@@ -5,13 +5,13 @@ export const alertStreamEventSchema = z
   .object({
     id: z.number().int(),
     op: z.enum(["created", "updated"]),
-    alert_id: z.string().uuid(),
-    rule_id: z.string().uuid(),
+    alert_id: z.uuid(),
+    rule_id: z.uuid(),
     rule_name: z.string(),
     status: z.enum(["open", "acknowledged", "resolved"]),
     entity: z.enum(["card", "merchant"]),
     entity_id: z.string(),
-    created_at: z.string().datetime({ offset: true }),
+    created_at: z.iso.datetime({ offset: true }),
   })
   .strict();
 
@@ -50,7 +50,7 @@ export const componentStateSchema = z
   .object({
     name: componentNameSchema,
     status: z.enum(["up", "down", "unknown"]),
-    checked_at: z.string().datetime({ offset: true }),
+    checked_at: z.iso.datetime({ offset: true }),
     lag: z.number().int().nullable().optional(),
   })
   .strict();

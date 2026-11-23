@@ -76,3 +76,7 @@ jobs:
           git diff --exit-code -- src/shared/api/schema.d.ts
       - run: npm run test
       - run: npm run build
+      - run: npm audit --audit-level=high
+      - name: Dashboard image builds
+        working-directory: .
+        run: docker compose -f infra/docker-compose.yml build dashboard

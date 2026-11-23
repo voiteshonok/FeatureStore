@@ -22,7 +22,7 @@ const schema = z
   .superRefine((value, ctx) => {
     const error = noteError(resolutionNote(value.outcome, value.comment));
     if (error && value.comment.trim().length >= 3) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["comment"], message: error });
+      ctx.addIssue({ code: "custom", path: ["comment"], message: error });
     }
   });
 

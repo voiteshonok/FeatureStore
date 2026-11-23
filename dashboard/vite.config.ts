@@ -46,5 +46,16 @@ export default defineConfig({
     globals: true,
     pool: "threads",
     fileParallelism: false,
+    exclude: ["e2e/**", "node_modules/**", "dist/**"],
+    coverage: {
+      provider: "v8",
+      all: true,
+      reporter: ["text", "lcov"],
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: ["src/**/*.test.{ts,tsx}", "src/**/*.d.ts"],
+      thresholds: {
+        lines: 70,
+      },
+    },
   },
 });

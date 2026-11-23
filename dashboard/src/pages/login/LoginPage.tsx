@@ -13,7 +13,7 @@ const schema = z.object({
     .string()
     .trim()
     .min(1, "Email is required")
-    .email("Invalid email")
+    .pipe(z.email("Invalid email"))
     .transform((value) => value.toLowerCase()),
   password: z.string().min(1, "Password is required"),
 });

@@ -53,8 +53,8 @@ export function RecentAlerts({ items, rules, loading, error }: RecentAlertsProps
                 withBorder
                 p="sm"
                 td="none"
-                c="inherit"
-                bg={isNew ? "yellow.1" : undefined}
+                c={isNew ? undefined : "inherit"}
+                className={isNew ? classes.fresh : undefined}
               >
                 <Group justify="space-between" wrap="wrap" gap="sm">
                   <Stack gap={2} miw="0">

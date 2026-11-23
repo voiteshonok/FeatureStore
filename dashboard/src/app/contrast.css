@@ -1,0 +1,7 @@
+:root[data-mantine-color-scheme="light"] {
+  --mantine-color-dimmed: var(--mantine-color-gray-7) !important;
+}
+
+:root[data-mantine-color-scheme="dark"] {
+  --mantine-color-dimmed: var(--mantine-color-gray-3) !important;
+}

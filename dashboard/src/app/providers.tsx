@@ -15,6 +15,7 @@ import { onSessionExpired } from "@shared/lib/authEvents";
 
 import "@mantine/core/styles.css";
 import "@mantine/notifications/styles.css";
+import "@app/contrast.css";
 
 // Ensure auth endpoints are registered before first query.
 import "@features/session/api/authApi";
@@ -43,7 +44,7 @@ function SessionExpiredBridge({ children }: { children: ReactNode }) {
 export function AppProviders() {
   return (
     <Provider store={store}>
-      <MantineProvider theme={appTheme} defaultColorScheme="light">
+      <MantineProvider theme={appTheme} defaultColorScheme="auto">
         <Notifications position="top-right" />
         <ErrorBoundary>
           <SessionExpiredBridge>

@@ -6,6 +6,7 @@ import { useSelector } from "react-redux";
 import { formatRate } from "../model/format";
 import { selectEventsSeries, selectLatestStats } from "../model/streamSelectors";
 import type { StreamState } from "../model/streamSlice";
+import { ChartFrame } from "./ChartFrame";
 
 export function EventsChart() {
   const theme = useMantineTheme();
@@ -26,18 +27,20 @@ export function EventsChart() {
           {summary}
         </Text>
         {series.length === 0 ? null : (
-          <LineChart
-            h="16rem"
-            data={series}
-            dataKey="time"
-            series={[{ name: "eventsPerS", label: "Events/s", color: "brand.6" }]}
-            curveType="linear"
-            withDots={false}
-            strokeWidth={2}
-            gridAxis="xy"
-            xAxisProps={{ minTickGap: phone ? 96 : 48 }}
-            valueFormatter={(value) => formatRate(value)}
-          />
+          <ChartFrame>
+            <LineChart
+              h="16rem"
+              data={series}
+              dataKey="time"
+              series={[{ name: "eventsPerS", label: "Events/s", color: "brand.6" }]}
+              curveType="linear"
+              withDots={false}
+              strokeWidth={2}
+              gridAxis="xy"
+              xAxisProps={{ minTickGap: phone ? 96 : 48 }}
+              valueFormatter={(value) => formatRate(value)}
+            />
+          </ChartFrame>
         )}
       </Stack>
     </Paper>

@@ -53,3 +53,30 @@ jobs:
           enable-cache: true
       - run: uv sync --locked
       - run: uv run pytest -m integration --no-cov
+
+  dashboard:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
+      - name: Generated API types are current
+        run: |
+          npm run gen:api
+          git diff --exit-code -- src/shared/api/schema.d.ts
+      - run: npm run test
+      - run: npm run build
+      - run: npm audit --audit-level=high
+      - name: Dashboard image builds
+        working-directory: .
+        run: docker compose -f infra/docker-compose.yml build dashboard

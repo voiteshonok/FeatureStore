@@ -1,0 +1,21 @@
+.token {
+  overflow-wrap: anywhere;
+}
+
+.fresh {
+  background: light-dark(#fff3bf, #3d2b00);
+  color: light-dark(#3d2b00, #fff3bf);
+  animation: fresh-pulse 1.2s ease-in-out 2;
+}
+
+@keyframes fresh-pulse {
+  50% {
+    background: light-dark(#ffe066, #6b5010);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fresh {
+    animation: none;
+  }
+}

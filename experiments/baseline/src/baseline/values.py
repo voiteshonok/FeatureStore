@@ -126,22 +126,24 @@ def geo_feature(point: GeoPoint | None, request: FeatureRequest) -> FeatureValue
 
 
 def assemble(
-    card: CardAggregates,
-    merchant: MerchantAggregates,
+    card: CardAggregates | None,
+    merchant: MerchantAggregates | None,
     point: GeoPoint | None,
     request: FeatureRequest,
     now: datetime,
 ) -> dict[str, FeatureValue]:
-    """Every catalog feature, in catalog order."""
-    cards = card_features(card, now)
-    merchants = merchant_features(merchant, now)
-    geo = geo_feature(point, request)
+    """Catalog features for the entities on the request, in catalog order."""
+    cards = card_features(card, now) if card is not None else None
+    merchants = merchant_features(merchant, now) if merchant is not None else None
+    geo = geo_feature(point, request) if request.card_token is not None else None
     ordered: dict[str, FeatureValue] = {}
     for spec in CATALOG:
         if spec.agg == "geo_velocity":
-            ordered[spec.name] = geo
+            if geo is not None:
+                ordered[spec.name] = geo
         elif spec.entity == "card":
-            ordered[spec.name] = cards[spec.name]
-        else:
+            if cards is not None:
+                ordered[spec.name] = cards[spec.name]
+        elif merchants is not None:
             ordered[spec.name] = merchants[spec.name]
     return ordered

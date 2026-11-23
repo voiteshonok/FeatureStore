@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import cast
+from typing import Literal, cast
 from uuid import UUID
 
 from sqlalchemy import ColumnElement, Select, and_, or_, select
@@ -38,6 +38,7 @@ class AlertRepository:
         *,
         statuses: list[str] | None,
         entity: str | None,
+        entity_type: Literal["card", "merchant"] | None,
         rule_id: UUID | None,
         created_from: datetime | None,
         created_to: datetime | None,
@@ -52,6 +53,10 @@ class AlertRepository:
             conditions.append(Alert.status.in_(statuses))
         if entity is not None:
             conditions.append(or_(Alert.merchant_id == entity, Alert.card_token == entity))
+        if entity_type == "card":
+            conditions.append(Alert.card_token.is_not(None))
+        elif entity_type == "merchant":
+            conditions.append(Alert.merchant_id.is_not(None))
         if rule_id is not None:
             conditions.append(Alert.rule_id == rule_id)
         if created_from is not None:

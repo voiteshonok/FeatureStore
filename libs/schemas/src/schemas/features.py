@@ -1,7 +1,9 @@
 from enum import StrEnum
+from typing import Self
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, model_validator
+from pydantic_core import InitErrorDetails, PydanticCustomError, ValidationError
 
 from schemas.coords import CoordinateMixin, StrictModel
 from schemas.time import UtcMsDateTime
@@ -22,9 +24,27 @@ class FeatureValue(StrictModel):
 
 
 class FeatureRequest(CoordinateMixin):
-    card_token: str = Field(min_length=1)
-    merchant_id: str = Field(min_length=1)
+    card_token: str | None = Field(default=None, min_length=1)
+    merchant_id: str | None = Field(default=None, min_length=1)
     ts: UtcMsDateTime
+
+    @model_validator(mode="after")
+    def one_entity(self) -> Self:
+        if self.card_token is not None or self.merchant_id is not None:
+            return self
+        raise ValidationError.from_exception_data(
+            self.__class__.__name__,
+            [
+                InitErrorDetails(
+                    type=PydanticCustomError(
+                        "entity_required",
+                        "A card token or a merchant id is required",
+                    ),
+                    loc=("card_token",),
+                    input=None,
+                )
+            ],
+        )
 
 
 class FeatureResponse(StrictModel):

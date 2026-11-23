@@ -20,6 +20,7 @@ from detection.api.schemas import (
     AlertListOut,
     AlertOut,
     AlertUpdate,
+    Entity,
     Sort,
     Status,
 )
@@ -48,6 +49,7 @@ async def list_alerts(
     service: Annotated[AlertService, Depends(provide_alert_service)],
     status: Annotated[list[Status] | None, Query()] = None,
     entity: Annotated[str | None, Query()] = None,
+    entity_type: Annotated[Entity | None, Query()] = None,
     rule_id: Annotated[UUID | None, Query()] = None,
     created_from: Annotated[datetime | None, Query()] = None,
     created_to: Annotated[datetime | None, Query()] = None,
@@ -59,6 +61,7 @@ async def list_alerts(
         page = await service.list_alerts(
             statuses=status,
             entity=entity,
+            entity_type=entity_type,
             rule_id=rule_id,
             created_from=created_from,
             created_to=created_to,

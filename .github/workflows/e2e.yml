@@ -34,3 +34,31 @@ jobs:
           mkdir -p "$OUT"
           SMOKE=1 k6 run -e TARGET=direct -e HOST=localhost -e SMOKE=1 \
             --summary-export="$OUT/summary.json" experiments/load/features.js
+
+  dashboard:
+    needs: stage2
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+      - run: npm ci
+      - name: Install Playwright
+        run: npx playwright install --with-deps chromium
+      - name: Start the stack
+        working-directory: .
+        run: make secret up
+      - run: npm run test:e2e
+      - name: Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: dashboard/test-results

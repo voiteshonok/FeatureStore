@@ -21,6 +21,7 @@ from detection.services.transitions import can_mutate, transition_allowed
 
 Status = Literal["open", "acknowledged", "resolved"]
 Sort = Literal["created_at", "-created_at"]
+EntityType = Literal["card", "merchant"]
 
 
 class AlertNotFoundError(Exception):
@@ -70,6 +71,7 @@ class AlertService:
         *,
         statuses: list[Status] | None,
         entity: str | None,
+        entity_type: EntityType | None,
         rule_id: UUID | None,
         created_from: datetime | None,
         created_to: datetime | None,
@@ -90,6 +92,7 @@ class AlertService:
         rows = await self._alerts.list_page(
             statuses=list(statuses) if statuses else None,
             entity=entity,
+            entity_type=entity_type,
             rule_id=rule_id,
             created_from=created_from,
             created_to=created_to,

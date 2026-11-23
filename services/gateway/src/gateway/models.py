@@ -111,6 +111,8 @@ class AlertOut(BaseModel):
     created_at: datetime
     resolved_at: datetime | None
     acknowledged_at: datetime | None
+    acknowledged_by: str | None = None
+    resolved_by: str | None = None
     resolution_note: str | None = None
 
 

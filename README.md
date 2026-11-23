@@ -59,7 +59,7 @@ Service boundaries, contracts and the full deployment diagram: see
 | gateway | done — routing, API-key auth, rate limiting, timeouts/retries, request ids |
 | PostgreSQL OLTP (schemas, roles, seed) | done — infra/postgres, docs/db |
 | e2e | stage 2 and stage 3 flows (tests/e2e) |
-| dashboard | planned |
+| dashboard | scaffold — SPA on :8081 (T8.1); login and live panels follow |
 
 ## Quickstart
 
@@ -67,8 +67,9 @@ Requirements: Docker + Docker Compose, `uv`, Python 3.12.
 
 ```bash
 make secret        # generate local HMAC and JWT secrets (never committed)
-make up            # kafka, postgres, redis, clickhouse, topics, ingestion
+make up            # kafka, postgres, redis, clickhouse, topics, ingestion, gateway, dashboard
 make ps            # check health
+# operator UI (stubs until T8.2+): http://localhost:8081 — /api/ proxied to gateway
 make baseline-up   # SQL measurement stand on :8003 (ADR-015); not a service, not started by make up
 # send traffic:
 docker compose -f infra/docker-compose.yml --profile sim up simulator

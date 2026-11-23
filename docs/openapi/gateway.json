@@ -461,6 +461,26 @@
             }
           },
           {
+            "name": "entity_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "card",
+                    "merchant"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Entity Type"
+            }
+          },
+          {
             "name": "rule_id",
             "in": "query",
             "required": false,
@@ -1041,6 +1061,38 @@
           }
         ]
       }
+    },
+    "/v1/stream/alerts": {
+      "get": {
+        "summary": "Stream Alerts",
+        "operationId": "stream_alerts_v1_stream_alerts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/stream/system": {
+      "get": {
+        "summary": "Stream System",
+        "operationId": "stream_system_v1_stream_system_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1336,6 +1388,28 @@
             ],
             "title": "Acknowledged At"
           },
+          "acknowledged_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acknowledged By"
+          },
+          "resolved_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved By"
+          },
           "resolution_note": {
             "anyOf": [
               {
@@ -1542,13 +1616,27 @@
             "title": "Lon"
           },
           "card_token": {
-            "type": "string",
-            "minLength": 1,
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Card Token"
           },
           "merchant_id": {
-            "type": "string",
-            "minLength": 1,
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Merchant Id"
           },
           "ts": {
@@ -1560,8 +1648,6 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "card_token",
-          "merchant_id",
           "ts"
         ],
         "title": "FeatureRequest"
@@ -1724,29 +1810,27 @@
         "title": "RuleOut",
         "description": "Rule with conditions."
       },
-      "ProblemDetails": {
-        "$defs": {
-          "FieldErrorOut": {
-            "additionalProperties": false,
-            "description": "One validation field failure.",
-            "properties": {
-              "field": {
-                "title": "Field",
-                "type": "string"
-              },
-              "message": {
-                "title": "Message",
-                "type": "string"
-              }
-            },
-            "required": [
-              "field",
-              "message"
-            ],
-            "title": "FieldErrorOut",
-            "type": "object"
+      "FieldErrorOut": {
+        "additionalProperties": false,
+        "description": "One validation field failure.",
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
           }
         },
+        "required": [
+          "field",
+          "message"
+        ],
+        "title": "FieldErrorOut",
+        "type": "object"
+      },
+      "ProblemDetails": {
         "additionalProperties": false,
         "description": "Gateway-owned error body (T7.2 / RFC 9457-shaped).",
         "properties": {
@@ -1768,7 +1852,7 @@
           },
           "errors": {
             "items": {
-              "$ref": "#/$defs/FieldErrorOut"
+              "$ref": "#/components/schemas/FieldErrorOut"
             },
             "title": "Errors",
             "type": "array"

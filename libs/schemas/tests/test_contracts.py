@@ -146,6 +146,26 @@ def test_transaction_event_is_frozen() -> None:
         event.amount_minor = 1  # type: ignore[misc]
 
 
+def test_feature_request_accepts_either_entity() -> None:
+    card = FeatureRequest.model_validate({"card_token": "tok", "ts": NOW})
+    merchant = FeatureRequest.model_validate({"merchant_id": "m-1", "ts": NOW})
+    assert card.merchant_id is None
+    assert merchant.card_token is None
+
+
+def test_feature_request_requires_one_entity() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        FeatureRequest.model_validate({"ts": NOW})
+    assert error_fields(exc_info.value) == {"card_token"}
+    assert any(
+        "card token or a merchant id" in err["msg"].lower() for err in exc_info.value.errors()
+    )
+
+    with pytest.raises(ValidationError) as blank:
+        FeatureRequest.model_validate({"card_token": "", "merchant_id": "", "ts": NOW})
+    assert "card_token" in error_fields(blank.value)
+
+
 def test_feature_models_valid() -> None:
     value = FeatureValue(value=1.5, as_of=NOW, age_ms=10, status=FeatureStatus.fresh)
     request = FeatureRequest.model_validate(

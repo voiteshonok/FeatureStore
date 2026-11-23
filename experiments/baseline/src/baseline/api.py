@@ -170,10 +170,12 @@ async def load_features(
     request: FeatureRequest,
     now: datetime,
 ) -> dict[str, FeatureValue]:
+    card_token = request.card_token
+    merchant_id = request.merchant_id
     async with pool.connection() as conn:
-        card = await fetch_card(conn, request.card_token, now)
-        merchant = await fetch_merchant(conn, request.merchant_id, now)
-        point = await fetch_geo(conn, request.card_token)
+        card = await fetch_card(conn, card_token, now) if card_token is not None else None
+        merchant = await fetch_merchant(conn, merchant_id, now) if merchant_id is not None else None
+        point = await fetch_geo(conn, card_token) if card_token is not None else None
     return assemble(card, merchant, point, request, now)
 
 

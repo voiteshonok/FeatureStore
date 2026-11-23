@@ -14,7 +14,7 @@ from features.windows import (
     to_epoch_ms,
     watermark_key,
 )
-from schemas import FeatureRequest, FeatureStatus, partition_for
+from schemas import CATALOG, FeatureRequest, FeatureStatus, partition_for
 
 _CARD = "card-fresh"
 _MERCHANT = "m-1"
@@ -179,3 +179,34 @@ async def test_window_clock_is_now_not_request_ts() -> None:
 
     assert features["card_cnt_1m"].value == 1
     assert features["card_cnt_1m"].status is FeatureStatus.fresh
+
+
+async def test_one_entity_omits_the_other_side() -> None:
+    now_ms = to_epoch_ms(BASE)
+    redis = FakeAsyncRedis(decode_responses=True)
+    await _watermarks(redis, now_ms)
+    await _card_event(redis, now_ms)
+    await _merchant_bucket(redis, now_ms)
+
+    card_only = await serve(
+        redis,
+        _request(merchant_id=None),
+        now=BASE,
+        n_partitions=_PARTITIONS,
+    )
+    assert set(card_only) == _card_names() | {"geo_velocity_kmh"}
+    assert card_only["card_cnt_1m"].value == 1
+    assert card_only["geo_velocity_kmh"].status is FeatureStatus.default
+
+    merchant_only = await serve(
+        redis,
+        _request(card_token=None),
+        now=BASE,
+        n_partitions=_PARTITIONS,
+    )
+    assert set(merchant_only) == _merchant_names()
+    assert merchant_only["merchant_cnt_24h"].value == 2
+
+    both = await serve(redis, _request(), now=BASE, n_partitions=_PARTITIONS)
+    assert set(both) == {spec.name for spec in CATALOG}
+    assert len(both) == 9

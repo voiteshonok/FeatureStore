@@ -119,7 +119,10 @@ async def test_event_older_than_25h_leaves_no_window_keys() -> None:
     sha = await load_script(redis)
     now = datetime.now(UTC).replace(microsecond=0)
     now_ms = to_epoch_ms(now)
-    old_ms = now_ms - DAY_MS - 60 * MINUTE_MS
+    # Hour fields live until the end of the event's hour, plus 24h and 1min.
+    # That is up to 25h + 1min after event_time, so exactly 25h still leaves
+    # the merchant hash during the first minute of an hour.
+    old_ms = now_ms - DAY_MS - 61 * MINUTE_MS - 1
     event = make_event(
         event_time=from_ms(old_ms),
         ingest_time=now,

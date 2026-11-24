@@ -6,13 +6,22 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Body, Depends, Query
 
 from detection.api.deps import (
     OperatorRole,
     provide_alert_service,
     require_operator_id,
     require_operator_role,
+)
+from detection.api.examples import (
+    ALERT_ACKNOWLEDGED,
+    ALERT_DETAIL_EXAMPLE,
+    ALERT_LIST_EXAMPLE,
+    GET_ALERT_DESCRIPTION,
+    LIST_ALERTS_DESCRIPTION,
+    PATCH_DESCRIPTION,
+    PATCH_EXAMPLES,
 )
 from detection.api.mappers import alert_out, detail_out
 from detection.api.schemas import (
@@ -43,7 +52,15 @@ _MAX_LIMIT = 1000
 @router.get(
     "/alerts",
     response_model=AlertListOut,
-    responses={422: {"description": "Invalid cursor or query"}},
+    summary="List alerts",
+    description=LIST_ALERTS_DESCRIPTION,
+    openapi_extra={"security": []},
+    responses={
+        200: {
+            "description": "One page of alerts.",
+            "content": {"application/json": {"example": ALERT_LIST_EXAMPLE}},
+        }
+    },
 )
 async def list_alerts(
     service: Annotated[AlertService, Depends(provide_alert_service)],
@@ -80,7 +97,15 @@ async def list_alerts(
 @router.get(
     "/alerts/{alert_id}",
     response_model=AlertDetailOut,
-    responses={404: {"description": "Unknown alert"}},
+    summary="Get alert",
+    description=GET_ALERT_DESCRIPTION,
+    openapi_extra={"security": []},
+    responses={
+        200: {
+            "description": "Alert, rule, and audit history.",
+            "content": {"application/json": {"example": ALERT_DETAIL_EXAMPLE}},
+        }
+    },
 )
 async def get_alert(
     alert_id: UUID,
@@ -96,16 +121,19 @@ async def get_alert(
 @router.patch(
     "/alerts/{alert_id}",
     response_model=AlertOut,
+    summary="Update alert status",
+    description=PATCH_DESCRIPTION,
+    openapi_extra={"security": []},
     responses={
-        403: {"description": "Viewer cannot change status"},
-        404: {"description": "Unknown alert"},
-        409: {"description": "Invalid transition"},
-        422: {"description": "Missing or invalid note / headers"},
+        200: {
+            "description": "Alert after the transition.",
+            "content": {"application/json": {"example": ALERT_ACKNOWLEDGED}},
+        }
     },
 )
 async def patch_alert(
     alert_id: UUID,
-    body: AlertUpdate,
+    body: Annotated[AlertUpdate, Body(openapi_examples=PATCH_EXAMPLES)],
     service: Annotated[AlertService, Depends(provide_alert_service)],
     operator_id: Annotated[str, Depends(require_operator_id)],
     role: Annotated[OperatorRole, Depends(require_operator_role)],

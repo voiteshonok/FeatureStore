@@ -11,7 +11,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Health */
+        /**
+         * Health
+         * @description The process is up. This probe does not check dependencies.
+         */
         get: operations["health_health_get"];
         put?: never;
         post?: never;
@@ -28,7 +31,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Ready */
+        /**
+         * Ready
+         * @description Features and detection each answer /health within one second. 503 uses the same body with status not_ready.
+         */
         get: operations["ready_ready_get"];
         put?: never;
         post?: never;
@@ -47,7 +53,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Login */
+        /**
+         * Log in
+         * @description Exchange an operator email and password for a session cookie. Login does not require a CSRF header. The limit is 5 attempts per minute per IP. A failed login returns the same 401 whether the email is unknown or the password is wrong.
+         */
         post: operations["login_v1_auth_login_post"];
         delete?: never;
         options?: never;
@@ -64,7 +73,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Logout */
+        /**
+         * Log out
+         * @description Clear the fs_session cookie. Requires the session cookie and the CSRF header X-Requested-With: fetch.
+         */
         post: operations["logout_v1_auth_logout_post"];
         delete?: never;
         options?: never;
@@ -79,7 +91,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Me */
+        /**
+         * Current operator
+         * @description Return the operator id, email, and role for the current session.
+         */
         get: operations["me_v1_auth_me_get"];
         put?: never;
         post?: never;
@@ -98,7 +113,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Post Features */
+        /**
+         * Read features
+         * @description Read the feature vector for a card, a merchant, or both. POST is used because the body carries a card token and coordinates: they must not appear in URLs, access logs, or proxy caches. An API key or a session cookie is accepted.
+         */
         post: operations["post_features_v1_features_post"];
         delete?: never;
         options?: never;
@@ -113,7 +131,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Alerts */
+        /**
+         * List alerts
+         * @description List alerts with keyset pagination. Requires a session cookie. An API key is not accepted.
+         */
         get: operations["list_alerts_v1_alerts_get"];
         put?: never;
         post?: never;
@@ -130,14 +151,20 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Alert */
+        /**
+         * Get alert
+         * @description Fetch one alert with its rule and audit history. Requires a session cookie.
+         */
         get: operations["get_alert_v1_alerts__alert_id__get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** Patch Alert */
+        /**
+         * Update alert status
+         * @description Change an alert status. Requires a session cookie, role analyst or admin, and the CSRF header X-Requested-With: fetch. Allowed transitions: open to acknowledged, acknowledged to resolved, and open to resolved. resolved is final. A note of 3–500 characters is required when resolving.
+         */
         patch: operations["patch_alert_v1_alerts__alert_id__patch"];
         trace?: never;
     };
@@ -148,7 +175,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Rules */
+        /**
+         * List rules
+         * @description List alert rules and their conditions. Rules are data. Requires a session cookie.
+         */
         get: operations["list_rules_v1_rules_get"];
         put?: never;
         post?: never;
@@ -165,7 +195,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Catalog */
+        /**
+         * Feature catalog
+         * @description List feature definitions and versions. Requires a session cookie.
+         */
         get: operations["get_catalog_v1_catalog_get"];
         put?: never;
         post?: never;
@@ -182,7 +215,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Stream Alerts */
+        /**
+         * Alert stream
+         * @description Server-Sent Events of alert and stats frames. Requires a session cookie. Payloads: docs/asyncapi/alerts-stream.yaml.
+         */
         get: operations["stream_alerts_v1_stream_alerts_get"];
         put?: never;
         post?: never;
@@ -199,7 +235,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Stream System */
+        /**
+         * System stream
+         * @description Server-Sent Events of system state (snapshot and change). Requires a session cookie. Payloads: docs/asyncapi/system-stream.yaml.
+         */
         get: operations["stream_system_v1_stream_system_get"];
         put?: never;
         post?: never;
@@ -213,11 +252,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** HTTPValidationError */
-        HTTPValidationError: {
-            /** Detail */
-            detail?: components["schemas"]["ValidationError"][];
-        };
         /**
          * LoginBody
          * @description Body of ``POST /v1/auth/login``.
@@ -263,19 +297,6 @@ export interface components {
              * @enum {string}
              */
             detection: "ok" | "down";
-        };
-        /** ValidationError */
-        ValidationError: {
-            /** Location */
-            loc: (string | number)[];
-            /** Message */
-            msg: string;
-            /** Error Type */
-            type: string;
-            /** Input */
-            input?: unknown;
-            /** Context */
-            ctx?: Record<string, never>;
         };
         /**
          * AlertDetailOut
@@ -509,7 +530,139 @@ export interface components {
             errors?: components["schemas"]["FieldErrorOut"][];
         };
     };
-    responses: never;
+    responses: {
+        /** @description Missing credentials, invalid session, or bad login. */
+        Unauthorized: {
+            headers: {
+                /**
+                 * @description Correlation id. Echoed from the request or generated when the header is empty.
+                 * @example 6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22
+                 */
+                "X-Request-ID"?: string;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ProblemDetails"];
+            };
+        };
+        /** @description Unknown API key, insufficient role, or missing CSRF header. */
+        Forbidden: {
+            headers: {
+                /**
+                 * @description Correlation id. Echoed from the request or generated when the header is empty.
+                 * @example 6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22
+                 */
+                "X-Request-ID"?: string;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ProblemDetails"];
+            };
+        };
+        /** @description The resource id is unknown. Do not retry it. */
+        NotFound: {
+            headers: {
+                /**
+                 * @description Correlation id. Echoed from the request or generated when the header is empty.
+                 * @example 6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22
+                 */
+                "X-Request-ID"?: string;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ProblemDetails"];
+            };
+        };
+        /** @description The state change conflicts with the current resource. */
+        Conflict: {
+            headers: {
+                /**
+                 * @description Correlation id. Echoed from the request or generated when the header is empty.
+                 * @example 6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22
+                 */
+                "X-Request-ID"?: string;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ProblemDetails"];
+            };
+        };
+        /** @description Body, query, or header failed schema or business validation. */
+        ValidationError: {
+            headers: {
+                /**
+                 * @description Correlation id. Echoed from the request or generated when the header is empty.
+                 * @example 6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22
+                 */
+                "X-Request-ID"?: string;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ProblemDetails"];
+            };
+        };
+        /** @description The client exceeded a gateway rate limit. Honour Retry-After. */
+        RateLimited: {
+            headers: {
+                /**
+                 * @description Correlation id. Echoed from the request or generated when the header is empty.
+                 * @example 6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22
+                 */
+                "X-Request-ID"?: string;
+                /**
+                 * @description Seconds to wait before retrying.
+                 * @example 1
+                 */
+                "Retry-After"?: string;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ProblemDetails"];
+            };
+        };
+        /** @description Unexpected exception. Retry once and quote request_id. */
+        InternalError: {
+            headers: {
+                /**
+                 * @description Correlation id. Echoed from the request or generated when the header is empty.
+                 * @example 6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22
+                 */
+                "X-Request-ID"?: string;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ProblemDetails"];
+            };
+        };
+        /** @description A dependency is down. Retry with backoff. */
+        UpstreamUnavailable: {
+            headers: {
+                /**
+                 * @description Correlation id. Echoed from the request or generated when the header is empty.
+                 * @example 6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22
+                 */
+                "X-Request-ID"?: string;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ProblemDetails"];
+            };
+        };
+        /** @description The gateway timed out waiting for an upstream. Retry with backoff. */
+        UpstreamTimeout: {
+            headers: {
+                /**
+                 * @description Correlation id. Echoed from the request or generated when the header is empty.
+                 * @example 6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22
+                 */
+                "X-Request-ID"?: string;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ProblemDetails"];
+            };
+        };
+    };
     parameters: never;
     requestBodies: never;
     headers: never;
@@ -520,49 +673,91 @@ export interface operations {
     health_health_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Correlation id. Generated when the header is empty. */
+                "X-Request-ID"?: string;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Process is running. */
             200: {
                 headers: {
+                    /**
+                     * @description Correlation id. Echoed from the request or generated when the header is empty.
+                     * @example 6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22
+                     */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "status": "ok"
+                     *     }
+                     */
                     "application/json": {
                         [key: string]: string;
                     };
                 };
             };
+            500: components["responses"]["InternalError"];
         };
     };
     ready_ready_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Correlation id. Generated when the header is empty. */
+                "X-Request-ID"?: string;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Dependencies are up. */
             200: {
                 headers: {
+                    /**
+                     * @description Correlation id. Echoed from the request or generated when the header is empty.
+                     * @example 6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22
+                     */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "status": "ready",
+                     *       "features": "ok",
+                     *       "detection": "ok"
+                     *     }
+                     */
                     "application/json": components["schemas"]["ReadyBody"];
                 };
             };
-            /** @description Service Unavailable */
+            500: components["responses"]["InternalError"];
+            /** @description A dependency is down. */
             503: {
                 headers: {
+                    /**
+                     * @description Correlation id. Echoed from the request or generated when the header is empty.
+                     * @example 6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22
+                     */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "status": "not_ready",
+                     *       "features": "down",
+                     *       "detection": "ok"
+                     *     }
+                     */
                     "application/json": components["schemas"]["ReadyBody"];
                 };
             };
@@ -584,67 +779,28 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Session cookie set. The response has no body. Set-Cookie: fs_session, HttpOnly, SameSite=Strict, Max-Age=3600, Path=/api. Secure is added when cookie_secure is on. */
             204: {
                 headers: {
+                    /**
+                     * @description Session cookie set. The response has no body. Set-Cookie: fs_session, HttpOnly, SameSite=Strict, Max-Age=3600, Path=/api. Secure is added when cookie_secure is on.
+                     * @example fs_session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIn0.sig; HttpOnly; Max-Age=3600; Path=/api; SameSite=strict
+                     */
+                    "Set-Cookie"?: string;
+                    /**
+                     * @description Correlation id. Echoed from the request or generated when the header is empty.
+                     * @example 6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22
+                     */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Missing credentials or invalid session */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            /** @description Rate limit exceeded */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Upstream or catalog unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Upstream timeout */
-            504: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["ValidationError"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["UpstreamUnavailable"];
         };
     };
     logout_v1_auth_logout_post: {
@@ -659,58 +815,27 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Session cookie cleared (Max-Age=0, Path=/api, HttpOnly, SameSite=Strict). The response has no body. */
             204: {
                 headers: {
+                    /**
+                     * @description Session cookie cleared (Max-Age=0, Path=/api, HttpOnly, SameSite=Strict). The response has no body.
+                     * @example fs_session=; HttpOnly; Max-Age=0; Path=/api; SameSite=strict
+                     */
+                    "Set-Cookie"?: string;
+                    /**
+                     * @description Correlation id. Echoed from the request or generated when the header is empty.
+                     * @example 6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22
+                     */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Missing credentials or invalid session */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Rate limit exceeded */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Upstream or catalog unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Upstream timeout */
-            504: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
         };
     };
     me_v1_auth_me_get: {
@@ -725,60 +850,30 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Current operator. */
             200: {
                 headers: {
+                    /**
+                     * @description Correlation id. Echoed from the request or generated when the header is empty.
+                     * @example 6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22
+                     */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "operator_id": "2",
+                     *       "email": "analyst@featurestore.local",
+                     *       "role": "analyst"
+                     *     }
+                     */
                     "application/json": components["schemas"]["MeOut"];
                 };
             };
-            /** @description Missing credentials or invalid session */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Rate limit exceeded */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Upstream or catalog unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Upstream timeout */
-            504: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
+            401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["UpstreamUnavailable"];
         };
     };
     post_features_v1_features_post: {
@@ -797,69 +892,52 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Feature vector. */
             200: {
                 headers: {
+                    /**
+                     * @description Correlation id. Echoed from the request or generated when the header is empty.
+                     * @example 6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22
+                     */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "request_id": "3b7f0d0e-5c9a-4c27-a1b1-f0f3d2a9e812",
+                     *       "features": {
+                     *         "card_cnt_1m": {
+                     *           "value": 4,
+                     *           "as_of": "2026-11-24T17:59:58.000Z",
+                     *           "age_ms": 2140,
+                     *           "status": "fresh"
+                     *         },
+                     *         "merchant_cnt_24h": {
+                     *           "value": 1312,
+                     *           "as_of": "2026-11-24T17:59:59.000Z",
+                     *           "age_ms": 1020,
+                     *           "status": "fresh"
+                     *         },
+                     *         "geo_velocity_kmh": {
+                     *           "value": 0,
+                     *           "as_of": null,
+                     *           "age_ms": null,
+                     *           "status": "fresh"
+                     *         }
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["FeatureResponse"];
                 };
             };
-            /** @description Missing credentials or invalid session */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            /** @description Rate limit exceeded */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Upstream or catalog unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Upstream timeout */
-            504: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["ValidationError"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["UpstreamUnavailable"];
+            504: components["responses"]["UpstreamTimeout"];
         };
     };
     list_alerts_v1_alerts_get: {
@@ -884,67 +962,51 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description One page of alerts. */
             200: {
                 headers: {
+                    /**
+                     * @description Correlation id. Echoed from the request or generated when the header is empty.
+                     * @example 6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22
+                     */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "items": [
+                     *         {
+                     *           "alert_id": "6a4e2f0c-1d8b-4a37-9b9e-2c7f5e1a0b44",
+                     *           "rule_id": "c0ffee00-0000-4000-8000-000000000001",
+                     *           "status": "open",
+                     *           "merchant_id": null,
+                     *           "card_token": "c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00",
+                     *           "event_id": "3b7f0d0e-5c9a-4c27-a1b1-f0f3d2a9e811",
+                     *           "feature_snapshot": {
+                     *             "card_cnt_1m": 6
+                     *           },
+                     *           "created_at": "2026-11-24T18:01:12.418Z",
+                     *           "resolved_at": null,
+                     *           "acknowledged_at": null,
+                     *           "acknowledged_by": null,
+                     *           "resolved_by": null,
+                     *           "resolution_note": null
+                     *         }
+                     *       ],
+                     *       "next_cursor": null
+                     *     }
+                     */
                     "application/json": components["schemas"]["AlertListOut"];
                 };
             };
-            /** @description Missing credentials or invalid session */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Invalid cursor or query */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Rate limit exceeded */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Upstream or catalog unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Upstream timeout */
-            504: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["ValidationError"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["UpstreamUnavailable"];
+            504: components["responses"]["UpstreamTimeout"];
         };
     };
     get_alert_v1_alerts__alert_id__get: {
@@ -961,76 +1023,71 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Alert, rule, and audit history. */
             200: {
                 headers: {
+                    /**
+                     * @description Correlation id. Echoed from the request or generated when the header is empty.
+                     * @example 6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22
+                     */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "alert": {
+                     *         "alert_id": "6a4e2f0c-1d8b-4a37-9b9e-2c7f5e1a0b44",
+                     *         "rule_id": "c0ffee00-0000-4000-8000-000000000001",
+                     *         "status": "open",
+                     *         "merchant_id": null,
+                     *         "card_token": "c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00",
+                     *         "event_id": "3b7f0d0e-5c9a-4c27-a1b1-f0f3d2a9e811",
+                     *         "feature_snapshot": {
+                     *           "card_cnt_1m": 6
+                     *         },
+                     *         "created_at": "2026-11-24T18:01:12.418Z",
+                     *         "resolved_at": null,
+                     *         "acknowledged_at": null,
+                     *         "acknowledged_by": null,
+                     *         "resolved_by": null,
+                     *         "resolution_note": null
+                     *       },
+                     *       "rule": {
+                     *         "rule_id": "c0ffee00-0000-4000-8000-000000000001",
+                     *         "name": "card_velocity_burst",
+                     *         "entity": "card",
+                     *         "enabled": true,
+                     *         "conditions": [
+                     *           {
+                     *             "feature_name": "card_cnt_1m",
+                     *             "comparison": "gt",
+                     *             "threshold": 5
+                     *           }
+                     *         ]
+                     *       },
+                     *       "history": [
+                     *         {
+                     *           "audit_id": 1,
+                     *           "occurred_at": "2026-11-24T18:01:12.418Z",
+                     *           "actor": "analyst@featurestore.local",
+                     *           "action": "created",
+                     *           "detail": {}
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": components["schemas"]["AlertDetailOut"];
                 };
             };
-            /** @description Missing credentials or invalid session */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Unknown alert */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            /** @description Rate limit exceeded */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Upstream or catalog unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Upstream timeout */
-            504: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationError"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["UpstreamUnavailable"];
+            504: components["responses"]["UpstreamTimeout"];
         };
     };
     patch_alert_v1_alerts__alert_id__patch: {
@@ -1051,81 +1108,48 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Alert after the transition. */
             200: {
                 headers: {
+                    /**
+                     * @description Correlation id. Echoed from the request or generated when the header is empty.
+                     * @example 6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22
+                     */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "alert_id": "6a4e2f0c-1d8b-4a37-9b9e-2c7f5e1a0b44",
+                     *       "rule_id": "c0ffee00-0000-4000-8000-000000000001",
+                     *       "status": "acknowledged",
+                     *       "merchant_id": null,
+                     *       "card_token": "c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00",
+                     *       "event_id": "3b7f0d0e-5c9a-4c27-a1b1-f0f3d2a9e811",
+                     *       "feature_snapshot": {
+                     *         "card_cnt_1m": 6
+                     *       },
+                     *       "created_at": "2026-11-24T18:01:12.418Z",
+                     *       "resolved_at": null,
+                     *       "acknowledged_at": "2026-11-24T18:05:00.000Z",
+                     *       "acknowledged_by": "analyst@featurestore.local",
+                     *       "resolved_by": null,
+                     *       "resolution_note": null
+                     *     }
+                     */
                     "application/json": components["schemas"]["AlertOut"];
                 };
             };
-            /** @description Missing credentials or invalid session */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Unknown alert */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Invalid transition */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Missing or invalid note / headers */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Rate limit exceeded */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Upstream or catalog unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Upstream timeout */
-            504: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["UpstreamUnavailable"];
+            504: components["responses"]["UpstreamTimeout"];
         };
     };
     list_rules_v1_rules_get: {
@@ -1140,60 +1164,61 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Seeded rules. */
             200: {
                 headers: {
+                    /**
+                     * @description Correlation id. Echoed from the request or generated when the header is empty.
+                     * @example 6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22
+                     */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "rule_id": "c0ffee00-0000-4000-8000-000000000001",
+                     *         "name": "card_velocity_burst",
+                     *         "entity": "card",
+                     *         "enabled": true,
+                     *         "conditions": [
+                     *           {
+                     *             "feature_name": "card_cnt_1m",
+                     *             "comparison": "gt",
+                     *             "threshold": 5
+                     *           }
+                     *         ]
+                     *       },
+                     *       {
+                     *         "rule_id": "c0ffee00-0000-4000-8000-000000000003",
+                     *         "name": "merchant_decline_wave",
+                     *         "entity": "merchant",
+                     *         "enabled": true,
+                     *         "conditions": [
+                     *           {
+                     *             "feature_name": "merchant_decline_rate_24h",
+                     *             "comparison": "gt",
+                     *             "threshold": 0.35
+                     *           },
+                     *           {
+                     *             "feature_name": "merchant_cnt_24h",
+                     *             "comparison": "ge",
+                     *             "threshold": 20
+                     *           }
+                     *         ]
+                     *       }
+                     *     ]
+                     */
                     "application/json": components["schemas"]["RuleOut"][];
                 };
             };
-            /** @description Missing credentials or invalid session */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Rate limit exceeded */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Upstream or catalog unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Upstream timeout */
-            504: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["UpstreamUnavailable"];
+            504: components["responses"]["UpstreamTimeout"];
         };
     };
     get_catalog_v1_catalog_get: {
@@ -1208,100 +1233,124 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Registry rows. */
             200: {
                 headers: {
+                    /**
+                     * @description Correlation id. Echoed from the request or generated when the header is empty.
+                     * @example 6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22
+                     */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "name": "card_cnt_1m",
+                     *         "entity": "card",
+                     *         "kind": "stream",
+                     *         "agg": "count",
+                     *         "default_value": 0,
+                     *         "version": 1,
+                     *         "window_ms": 60000,
+                     *         "stale_after_ms": 5000
+                     *       },
+                     *       {
+                     *         "name": "geo_velocity_kmh",
+                     *         "entity": "card",
+                     *         "kind": "on_demand",
+                     *         "agg": "geo_velocity",
+                     *         "default_value": null,
+                     *         "version": 1,
+                     *         "window_ms": null,
+                     *         "stale_after_ms": null
+                     *       }
+                     *     ]
+                     */
                     "application/json": components["schemas"]["CatalogEntry"][];
                 };
             };
-            /** @description Missing credentials or invalid session */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Rate limit exceeded */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Upstream or catalog unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Upstream timeout */
-            504: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["UpstreamUnavailable"];
         };
     };
     stream_alerts_v1_stream_alerts_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Correlation id. Generated when the header is empty. */
+                "X-Request-ID"?: string;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description SSE stream. See docs/asyncapi/alerts-stream.yaml. */
             200: {
                 headers: {
+                    /**
+                     * @description Correlation id. Echoed from the request or generated when the header is empty.
+                     * @example 6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22
+                     */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    /**
+                     * @example event: alert
+                     *     id: 42
+                     *     data: {"id":42,"op":"created","alert_id":"6a4e2f0c-1d8b-4a37-9b9e-2c7f5e1a0b44","rule_id":"c0ffee00-0000-4000-8000-000000000001","rule_name":"card_velocity_burst","status":"open","entity":"card","entity_id":"c0ff…e00","created_at":"2026-11-24T18:01:12.418Z"}
+                     */
+                    "text/event-stream": string;
                 };
             };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["UpstreamUnavailable"];
         };
     };
     stream_system_v1_stream_system_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Correlation id. Generated when the header is empty. */
+                "X-Request-ID"?: string;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description SSE stream. See docs/asyncapi/system-stream.yaml. */
             200: {
                 headers: {
+                    /**
+                     * @description Correlation id. Echoed from the request or generated when the header is empty.
+                     * @example 6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22
+                     */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    /**
+                     * @example event: snapshot
+                     *     data: {"mode":"normal","components":[{"name":"gateway","status":"up","checked_at":"2026-11-24T18:01:12.418Z","lag":null}]}
+                     */
+                    "text/event-stream": string;
                 };
             };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["UpstreamUnavailable"];
         };
     };
 }

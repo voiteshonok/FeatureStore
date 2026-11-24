@@ -19,6 +19,10 @@ jobs:
           enable-cache: true
       - run: uv sync --locked
       - run: make secret up topics test-e2e
+      - name: Runnable guides
+        run: |
+          bash docs/guides/scripts/getting-started.sh
+          bash docs/guides/scripts/triage.sh
       - name: Install k6
         run: |
           set -euo pipefail

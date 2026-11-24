@@ -1,0 +1,20 @@
+# This file instructs Redocly's linter to ignore the rules contained for specific parts of your API.
+# See https://redocly.com/docs/cli/ for more information.
+# Probes and detection's rule list return 2xx or 5xx only.
+docs/openapi/detection.json:
+  operation-4xx-response:
+    - '#/paths/~1health/get/responses'
+    - '#/paths/~1ready/get/responses'
+    - '#/paths/~1v1~1rules/get/responses'
+docs/openapi/features.json:
+  operation-4xx-response:
+    - '#/paths/~1health/get/responses'
+    - '#/paths/~1ready/get/responses'
+docs/openapi/gateway.json:
+  operation-4xx-response:
+    - '#/paths/~1health/get/responses'
+    - '#/paths/~1ready/get/responses'
+docs/openapi/ingestion.json:
+  operation-4xx-response:
+    - '#/paths/~1health/get/responses'
+    - '#/paths/~1ready/get/responses'

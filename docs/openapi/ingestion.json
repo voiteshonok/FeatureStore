@@ -1,17 +1,31 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "ingestion",
-    "version": "0.1.0"
+    "title": "Feature Store Ingestion",
+    "description": "Internal payment intake. The PAN is tokenized before the event is published. This service is not part of the public gateway API.",
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    },
+    "version": "1.0.0"
   },
+  "servers": [
+    {
+      "url": "http://localhost:8000"
+    }
+  ],
   "paths": {
     "/health": {
       "get": {
+        "tags": [
+          "ops"
+        ],
         "summary": "Health",
+        "description": "The process is up. This probe does not check Kafka or Postgres.",
         "operationId": "health_health_get",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "Process is running.",
             "content": {
               "application/json": {
                 "schema": {
@@ -20,38 +34,153 @@
                   },
                   "type": "object",
                   "title": "Response Health Health Get"
+                },
+                "example": {
+                  "status": "ok"
                 }
               }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
+              }
             }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
-        }
+        },
+        "security": [],
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Correlation id. Generated when the header is empty."
+          }
+        ]
       }
     },
     "/ready": {
       "get": {
+        "tags": [
+          "ops"
+        ],
         "summary": "Ready",
+        "description": "Kafka and Postgres each answer within one second.",
         "operationId": "ready_ready_get",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "Kafka and Postgres are up.",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {},
+                "example": {
+                  "status": "ready",
+                  "kafka": "ok",
+                  "postgres": "ok"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
               }
             }
+          },
+          "503": {
+            "description": "A dependency is down.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "not_ready",
+                  "kafka": "down",
+                  "postgres": "ok"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
-        }
+        },
+        "security": [],
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Correlation id. Generated when the header is empty."
+          }
+        ]
       }
     },
     "/v1/events": {
       "post": {
-        "summary": "Post Event",
+        "tags": [
+          "events"
+        ],
+        "summary": "Accept payment",
+        "description": "Accept a payment. The PAN is tokenized in this process and is not stored. Sending the same event_id again returns duplicate true and does not publish.",
         "operationId": "post_event_v1_events_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/PaymentIn"
+              },
+              "examples": {
+                "typical": {
+                  "summary": "Approved card payment with the test PAN",
+                  "value": {
+                    "event_id": "6a4e2f0c-1d8b-4a37-9b9e-2c7f5e1a0b44",
+                    "payment_id": "pay-2026-11-24-0001",
+                    "pan": "4111111111111111",
+                    "merchant_id": "m7",
+                    "amount_minor": 2599,
+                    "currency": "EUR",
+                    "status": "approved",
+                    "event_time": "2026-11-24T18:00:00.000Z",
+                    "lat": 54.6872,
+                    "lon": 25.2797
+                  }
+                },
+                "edge": {
+                  "summary": "Declined payment, minimum amount, no coordinates",
+                  "value": {
+                    "event_id": "7b5f3a1d-2e9c-4b48-8c0f-3d8a6f2b1c55",
+                    "payment_id": "pay-edge-1",
+                    "pan": "4111111111111111",
+                    "merchant_id": "m3",
+                    "amount_minor": 1,
+                    "currency": "EUR",
+                    "status": "declined",
+                    "event_time": "2026-11-24T18:01:12.418Z"
+                  }
+                }
               }
             }
           },
@@ -59,26 +188,62 @@
         },
         "responses": {
           "202": {
-            "description": "Successful Response",
+            "description": "Accepted, or recognized as a duplicate event_id.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/EventAccepted"
+                },
+                "examples": {
+                  "accepted": {
+                    "summary": "First delivery",
+                    "value": {
+                      "event_id": "6a4e2f0c-1d8b-4a37-9b9e-2c7f5e1a0b44",
+                      "duplicate": false
+                    }
+                  },
+                  "duplicate": {
+                    "summary": "Same event_id again",
+                    "value": {
+                      "event_id": "6a4e2f0c-1d8b-4a37-9b9e-2c7f5e1a0b44",
+                      "duplicate": true
+                    }
+                  }
                 }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
               }
             }
           },
           "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "503": {
+            "$ref": "#/components/responses/UpstreamUnavailable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
-        }
+        },
+        "security": [],
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Correlation id. Generated when the header is empty."
+          }
+        ]
       }
     }
   },
@@ -103,19 +268,6 @@
         ],
         "title": "EventAccepted",
         "description": "Body returned when an event is accepted or recognized as a duplicate."
-      },
-      "HTTPValidationError": {
-        "properties": {
-          "detail": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationError"
-            },
-            "type": "array",
-            "title": "Detail"
-          }
-        },
-        "type": "object",
-        "title": "HTTPValidationError"
       },
       "PaymentIn": {
         "properties": {
@@ -202,46 +354,193 @@
         ],
         "title": "PaymentIn"
       },
-      "ValidationError": {
+      "FieldError": {
+        "additionalProperties": false,
+        "description": "One validation field failure (422 only).",
         "properties": {
-          "loc": {
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                }
-              ]
-            },
-            "type": "array",
-            "title": "Location"
+          "field": {
+            "title": "Field",
+            "type": "string"
           },
-          "msg": {
-            "type": "string",
-            "title": "Message"
-          },
-          "type": {
-            "type": "string",
-            "title": "Error Type"
-          },
-          "input": {
-            "title": "Input"
-          },
-          "ctx": {
-            "type": "object",
-            "title": "Context"
+          "message": {
+            "title": "Message",
+            "type": "string"
           }
         },
-        "type": "object",
         "required": [
-          "loc",
-          "msg",
-          "type"
+          "field",
+          "message"
         ],
-        "title": "ValidationError"
+        "title": "FieldError",
+        "type": "object"
+      },
+      "ProblemDetails": {
+        "additionalProperties": false,
+        "description": "Uniform error body for all HTTP services.",
+        "properties": {
+          "type": {
+            "title": "Type",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "integer"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/FieldError"
+            },
+            "title": "Errors",
+            "type": "array"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "request_id"
+        ],
+        "title": "ProblemDetails",
+        "type": "object"
+      }
+    },
+    "responses": {
+      "ValidationError": {
+        "description": "Body, query, or header failed schema or business validation.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetails"
+            },
+            "examples": {
+              "validation_error": {
+                "summary": "Field validation failed",
+                "value": {
+                  "type": "validation_error",
+                  "title": "Request validation failed",
+                  "status": 422,
+                  "request_id": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22",
+                  "errors": [
+                    {
+                      "field": "note",
+                      "message": "note is required when resolving (3\u2013500 characters)"
+                    }
+                  ]
+                }
+              },
+              "bad_request": {
+                "summary": "Malformed request outside the schema",
+                "value": {
+                  "type": "bad_request",
+                  "title": "malformed request",
+                  "status": 400,
+                  "request_id": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22",
+                  "errors": []
+                }
+              },
+              "http_error": {
+                "summary": "Unmapped HTTP status",
+                "value": {
+                  "type": "http_error",
+                  "title": "http error",
+                  "status": 400,
+                  "request_id": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22",
+                  "errors": []
+                }
+              }
+            }
+          }
+        }
+      },
+      "InternalError": {
+        "description": "Unexpected exception. Retry once and quote request_id.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetails"
+            },
+            "examples": {
+              "internal_error": {
+                "summary": "Unhandled exception",
+                "value": {
+                  "type": "internal_error",
+                  "title": "Internal server error",
+                  "status": 500,
+                  "request_id": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22",
+                  "errors": []
+                }
+              }
+            }
+          }
+        }
+      },
+      "UpstreamUnavailable": {
+        "description": "A dependency is down. Retry with backoff.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetails"
+            },
+            "examples": {
+              "upstream_unavailable": {
+                "summary": "Dependency unavailable",
+                "value": {
+                  "type": "upstream_unavailable",
+                  "title": "upstream unavailable",
+                  "status": 503,
+                  "request_id": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22",
+                  "errors": []
+                }
+              }
+            }
+          }
+        }
       }
     }
-  }
+  },
+  "tags": [
+    {
+      "name": "events",
+      "description": "Payment intake. Idempotent by event_id."
+    },
+    {
+      "name": "ops",
+      "description": "Process health and readiness probes."
+    }
+  ]
 }

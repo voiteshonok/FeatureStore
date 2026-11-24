@@ -13,8 +13,10 @@ import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, Request
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from psycopg import AsyncConnection
 from psycopg.rows import TupleRow
@@ -23,6 +25,17 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from detection.api.alerts import router as alerts_router
+from detection.api.examples import (
+    API_DESCRIPTION,
+    ERROR_CODES,
+    HEALTH_DESCRIPTION,
+    HEALTH_EXAMPLE,
+    OPENAPI_TAGS,
+    READY_DESCRIPTION,
+    READY_DOWN,
+    READY_OK,
+    apply_response_examples,
+)
 from detection.api.rules import router as rules_router
 from detection.api.stream import router as stream_router
 from detection.consumer import DetectionConsumer, configure_logging
@@ -34,6 +47,7 @@ from detection.live.stats import LiveStats
 from detection.metrics import METRICS, DetectionMetrics, start_metrics_server
 from detection.rules import RuleCache
 from detection.settings import Settings
+from schemas.openapi_problems import finalize_documented_openapi
 
 _READY_TIMEOUT_S = 1.0
 
@@ -130,7 +144,15 @@ def create_app(
     include_test_routes: bool = False,
 ) -> FastAPI:
     """Build the detection API. Importing this module does not open connections."""
-    application = FastAPI(title="detection", lifespan=_lifespan)
+    application = FastAPI(
+        title="Feature Store Detection",
+        version="1.0.0",
+        description=API_DESCRIPTION,
+        servers=[{"url": "http://localhost:8002"}],
+        license_info={"name": "MIT", "identifier": "MIT"},
+        openapi_tags=OPENAPI_TAGS,
+        lifespan=_lifespan,
+    )
     application.state.settings = settings or Settings.from_env()
     application.state.metrics = METRICS if metrics is None else metrics
     # Defaults for unit tests that never enter lifespan.
@@ -141,11 +163,39 @@ def create_app(
     install_request_id_middleware(application)
     install_error_handlers(application)
 
-    @application.get("/health")
+    @application.get(
+        "/health",
+        tags=["ops"],
+        summary="Health",
+        description=HEALTH_DESCRIPTION,
+        openapi_extra={"security": []},
+        responses={
+            200: {
+                "description": "Process is running.",
+                "content": {"application/json": {"example": HEALTH_EXAMPLE}},
+            }
+        },
+    )
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    @application.get("/ready")
+    @application.get(
+        "/ready",
+        tags=["ops"],
+        summary="Ready",
+        description=READY_DESCRIPTION,
+        openapi_extra={"security": []},
+        responses={
+            200: {
+                "description": "Kafka consumer and Postgres are up.",
+                "content": {"application/json": {"example": READY_OK}},
+            },
+            503: {
+                "description": "A dependency is down.",
+                "content": {"application/json": {"example": READY_DOWN}},
+            },
+        },
+    )
     async def ready(request: Request) -> JSONResponse:
         task = request.app.state.consumer_task
         consumer = request.app.state.service
@@ -176,7 +226,35 @@ def create_app(
         async def probe(value: int) -> dict[str, int]:
             return {"value": value}
 
+    _bind_openapi(application)
     return application
+
+
+def _bind_openapi(application: FastAPI) -> None:
+    def openapi() -> dict[str, Any]:
+        cached = application.openapi_schema
+        if isinstance(cached, dict):
+            return cached
+        schema = get_openapi(
+            title=application.title,
+            version=application.version,
+            description=application.description,
+            routes=application.routes,
+            tags=application.openapi_tags,
+            servers=application.servers,
+            license_info=application.license_info,
+        )
+        finalize_documented_openapi(
+            schema,
+            tags=OPENAPI_TAGS,
+            errors=ERROR_CODES,
+            public=True,
+        )
+        apply_response_examples(schema)
+        application.openapi_schema = schema
+        return schema
+
+    application.openapi = openapi  # type: ignore[method-assign]
 
 
 def export_openapi(path: str) -> None:

@@ -1,17 +1,31 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "gateway",
-    "version": "0.1.0"
+    "title": "Feature Store Gateway",
+    "description": "Public HTTP API of the feature store (`/v1`).\n\nMachine clients send `X-API-Key` and call `POST /v1/features`. Operators send the\n`fs_session` cookie and call alerts, rules, the catalog, and the live streams.\n\n- Getting started: docs/guides/getting-started.md\n- Alert triage: docs/guides/alert-triage-tutorial.md\n- Errors: docs/api-errors.md\n- Changelog: docs/api-changelog.md\n- Architecture: docs/architecture.md\n",
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    },
+    "version": "1.0.0"
   },
+  "servers": [
+    {
+      "url": "http://localhost:8080"
+    }
+  ],
   "paths": {
     "/health": {
       "get": {
+        "tags": [
+          "ops"
+        ],
         "summary": "Health",
+        "description": "The process is up. This probe does not check dependencies.",
         "operationId": "health_health_get",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "Process is running.",
             "content": {
               "application/json": {
                 "schema": {
@@ -20,50 +34,144 @@
                   },
                   "type": "object",
                   "title": "Response Health Health Get"
+                },
+                "example": {
+                  "status": "ok"
                 }
               }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
+              }
             }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
-        }
+        },
+        "security": [],
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Correlation id. Generated when the header is empty."
+          }
+        ]
       }
     },
     "/ready": {
       "get": {
+        "tags": [
+          "ops"
+        ],
         "summary": "Ready",
+        "description": "Features and detection each answer /health within one second. 503 uses the same body with status not_ready.",
         "operationId": "ready_ready_get",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "Dependencies are up.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ReadyBody"
+                },
+                "example": {
+                  "status": "ready",
+                  "features": "ok",
+                  "detection": "ok"
                 }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
               }
             }
           },
           "503": {
-            "description": "Service Unavailable",
+            "description": "A dependency is down.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ReadyBody"
+                },
+                "example": {
+                  "status": "not_ready",
+                  "features": "down",
+                  "detection": "ok"
                 }
               }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
+              }
             }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
-        }
+        },
+        "security": [],
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Correlation id. Generated when the header is empty."
+          }
+        ]
       }
     },
     "/v1/auth/login": {
       "post": {
-        "summary": "Login",
+        "tags": [
+          "auth"
+        ],
+        "summary": "Log in",
+        "description": "Exchange an operator email and password for a session cookie. Login does not require a CSRF header. The limit is 5 attempts per minute per IP. A failed login returns the same 401 whether the email is unknown or the password is wrong.",
         "operationId": "login_v1_auth_login_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/LoginBody"
+              },
+              "examples": {
+                "typical": {
+                  "summary": "Seeded analyst",
+                  "value": {
+                    "email": "analyst@featurestore.local",
+                    "password": "demo-analyst-pass"
+                  }
+                },
+                "edge": {
+                  "summary": "Shortest schema-valid credentials",
+                  "value": {
+                    "email": "a@b",
+                    "password": "x"
+                  }
+                }
               }
             }
           },
@@ -71,69 +179,41 @@
         },
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Session cookie set. The response has no body. Set-Cookie: fs_session, HttpOnly, SameSite=Strict, Max-Age=3600, Path=/api. Secure is added when cookie_secure is on.",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Session cookie set. The response has no body. Set-Cookie: fs_session, HttpOnly, SameSite=Strict, Max-Age=3600, Path=/api. Secure is added when cookie_secure is on.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "fs_session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIn0.sig; HttpOnly; Max-Age=3600; Path=/api; SameSite=strict"
+              },
+              "X-Request-ID": {
+                "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
+              }
+            }
           },
           "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
+            "$ref": "#/components/responses/ValidationError"
           },
           "401": {
-            "description": "Missing credentials or invalid session",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Unauthorized"
           },
           "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/RateLimited"
           },
           "503": {
-            "description": "Upstream or catalog unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/UpstreamUnavailable"
           },
-          "504": {
-            "description": "Upstream timeout",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         },
+        "security": [],
         "parameters": [
           {
             "name": "X-Request-ID",
@@ -149,61 +229,43 @@
     },
     "/v1/auth/logout": {
       "post": {
-        "summary": "Logout",
+        "tags": [
+          "auth"
+        ],
+        "summary": "Log out",
+        "description": "Clear the fs_session cookie. Requires the session cookie and the CSRF header X-Requested-With: fetch.",
         "operationId": "logout_v1_auth_logout_post",
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Session cookie cleared (Max-Age=0, Path=/api, HttpOnly, SameSite=Strict). The response has no body.",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Session cookie cleared (Max-Age=0, Path=/api, HttpOnly, SameSite=Strict). The response has no body.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "fs_session=; HttpOnly; Max-Age=0; Path=/api; SameSite=strict"
+              },
+              "X-Request-ID": {
+                "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
+              }
+            }
           },
           "401": {
-            "description": "Missing credentials or invalid session",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Forbidden"
           },
           "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/RateLimited"
           },
-          "503": {
-            "description": "Upstream or catalog unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "504": {
-            "description": "Upstream timeout",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         },
         "security": [
@@ -226,68 +288,45 @@
     },
     "/v1/auth/me": {
       "get": {
-        "summary": "Me",
+        "tags": [
+          "auth"
+        ],
+        "summary": "Current operator",
+        "description": "Return the operator id, email, and role for the current session.",
         "operationId": "me_v1_auth_me_get",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "Current operator.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MeOut"
+                },
+                "example": {
+                  "operator_id": "2",
+                  "email": "analyst@featurestore.local",
+                  "role": "analyst"
                 }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
               }
             }
           },
           "401": {
-            "description": "Missing credentials or invalid session",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Unauthorized"
           },
           "503": {
-            "description": "Upstream or catalog unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/UpstreamUnavailable"
           },
-          "504": {
-            "description": "Upstream timeout",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         },
         "security": [
@@ -310,13 +349,36 @@
     },
     "/v1/features": {
       "post": {
-        "summary": "Post Features",
+        "tags": [
+          "features"
+        ],
+        "summary": "Read features",
+        "description": "Read the feature vector for a card, a merchant, or both. POST is used because the body carries a card token and coordinates: they must not appear in URLs, access logs, or proxy caches. An API key or a session cookie is accepted.",
         "operationId": "post_features_v1_features_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/FeatureRequest"
+              },
+              "examples": {
+                "typical": {
+                  "summary": "Card and merchant",
+                  "value": {
+                    "card_token": "c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00",
+                    "merchant_id": "m7",
+                    "ts": "2026-11-24T18:00:00.000Z",
+                    "lat": 54.6872,
+                    "lon": 25.2797
+                  }
+                },
+                "edge": {
+                  "summary": "Merchant only",
+                  "value": {
+                    "merchant_id": "m7",
+                    "ts": "2026-11-24T18:00:00.000Z"
+                  }
+                }
               }
             }
           },
@@ -324,74 +386,67 @@
         },
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "Feature vector.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/FeatureResponse"
+                },
+                "example": {
+                  "request_id": "3b7f0d0e-5c9a-4c27-a1b1-f0f3d2a9e812",
+                  "features": {
+                    "card_cnt_1m": {
+                      "value": 4,
+                      "as_of": "2026-11-24T17:59:58.000Z",
+                      "age_ms": 2140,
+                      "status": "fresh"
+                    },
+                    "merchant_cnt_24h": {
+                      "value": 1312,
+                      "as_of": "2026-11-24T17:59:59.000Z",
+                      "age_ms": 1020,
+                      "status": "fresh"
+                    },
+                    "geo_velocity_kmh": {
+                      "value": 0.0,
+                      "as_of": null,
+                      "age_ms": null,
+                      "status": "fresh"
+                    }
+                  }
                 }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
               }
             }
           },
           "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
+            "$ref": "#/components/responses/ValidationError"
           },
           "401": {
-            "description": "Missing credentials or invalid session",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Forbidden"
           },
           "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/RateLimited"
           },
           "503": {
-            "description": "Upstream or catalog unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/UpstreamUnavailable"
           },
           "504": {
-            "description": "Upstream timeout",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/UpstreamTimeout"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         },
         "security": [
@@ -417,7 +472,11 @@
     },
     "/v1/alerts": {
       "get": {
-        "summary": "List Alerts",
+        "tags": [
+          "alerts"
+        ],
+        "summary": "List alerts",
+        "description": "List alerts with keyset pagination. Requires a session cookie. An API key is not accepted.",
         "operationId": "list_alerts_v1_alerts_get",
         "parameters": [
           {
@@ -583,73 +642,69 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "One page of alerts.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AlertListOut"
+                },
+                "example": {
+                  "items": [
+                    {
+                      "alert_id": "6a4e2f0c-1d8b-4a37-9b9e-2c7f5e1a0b44",
+                      "rule_id": "c0ffee00-0000-4000-8000-000000000001",
+                      "status": "open",
+                      "merchant_id": null,
+                      "card_token": "c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00",
+                      "event_id": "3b7f0d0e-5c9a-4c27-a1b1-f0f3d2a9e811",
+                      "feature_snapshot": {
+                        "card_cnt_1m": 6
+                      },
+                      "created_at": "2026-11-24T18:01:12.418Z",
+                      "resolved_at": null,
+                      "acknowledged_at": null,
+                      "acknowledged_by": null,
+                      "resolved_by": null,
+                      "resolution_note": null
+                    }
+                  ],
+                  "next_cursor": null
                 }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
               }
             }
           },
           "422": {
-            "description": "Invalid cursor or query"
+            "$ref": "#/components/responses/ValidationError"
           },
           "401": {
-            "description": "Missing credentials or invalid session",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Forbidden"
           },
           "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/RateLimited"
           },
           "503": {
-            "description": "Upstream or catalog unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/UpstreamUnavailable"
           },
           "504": {
-            "description": "Upstream timeout",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/UpstreamTimeout"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         },
         "security": [
-          {
-            "ApiKey": []
-          },
           {
             "SessionCookie": []
           }
@@ -658,7 +713,11 @@
     },
     "/v1/alerts/{alert_id}": {
       "get": {
-        "summary": "Get Alert",
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Get alert",
+        "description": "Fetch one alert with its rule and audit history. Requires a session cookie.",
         "operationId": "get_alert_v1_alerts__alert_id__get",
         "parameters": [
           {
@@ -683,90 +742,102 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "Alert, rule, and audit history.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AlertDetailOut"
+                },
+                "example": {
+                  "alert": {
+                    "alert_id": "6a4e2f0c-1d8b-4a37-9b9e-2c7f5e1a0b44",
+                    "rule_id": "c0ffee00-0000-4000-8000-000000000001",
+                    "status": "open",
+                    "merchant_id": null,
+                    "card_token": "c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00",
+                    "event_id": "3b7f0d0e-5c9a-4c27-a1b1-f0f3d2a9e811",
+                    "feature_snapshot": {
+                      "card_cnt_1m": 6
+                    },
+                    "created_at": "2026-11-24T18:01:12.418Z",
+                    "resolved_at": null,
+                    "acknowledged_at": null,
+                    "acknowledged_by": null,
+                    "resolved_by": null,
+                    "resolution_note": null
+                  },
+                  "rule": {
+                    "rule_id": "c0ffee00-0000-4000-8000-000000000001",
+                    "name": "card_velocity_burst",
+                    "entity": "card",
+                    "enabled": true,
+                    "conditions": [
+                      {
+                        "feature_name": "card_cnt_1m",
+                        "comparison": "gt",
+                        "threshold": 5
+                      }
+                    ]
+                  },
+                  "history": [
+                    {
+                      "audit_id": 1,
+                      "occurred_at": "2026-11-24T18:01:12.418Z",
+                      "actor": "analyst@featurestore.local",
+                      "action": "created",
+                      "detail": {}
+                    }
+                  ]
                 }
               }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
+              }
             }
-          },
-          "404": {
-            "description": "Unknown alert"
           },
           "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
+            "$ref": "#/components/responses/ValidationError"
           },
           "401": {
-            "description": "Missing credentials or invalid session",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
           },
           "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/RateLimited"
           },
           "503": {
-            "description": "Upstream or catalog unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/UpstreamUnavailable"
           },
           "504": {
-            "description": "Upstream timeout",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/UpstreamTimeout"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         },
         "security": [
-          {
-            "ApiKey": []
-          },
           {
             "SessionCookie": []
           }
         ]
       },
       "patch": {
-        "summary": "Patch Alert",
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Update alert status",
+        "description": "Change an alert status. Requires a session cookie, role analyst or admin, and the CSRF header X-Requested-With: fetch. Allowed transitions: open to acknowledged, acknowledged to resolved, and open to resolved. resolved is final. A note of 3\u2013500 characters is required when resolving.",
         "operationId": "patch_alert_v1_alerts__alert_id__patch",
         "parameters": [
           {
@@ -795,85 +866,91 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/AlertUpdate"
+              },
+              "examples": {
+                "typical": {
+                  "summary": "Acknowledge an open alert",
+                  "value": {
+                    "status": "acknowledged"
+                  }
+                },
+                "edge": {
+                  "summary": "Resolve with a note",
+                  "value": {
+                    "status": "resolved",
+                    "note": "Confirmed with cardholder, legitimate travel"
+                  }
+                }
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "Alert after the transition.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AlertOut"
+                },
+                "example": {
+                  "alert_id": "6a4e2f0c-1d8b-4a37-9b9e-2c7f5e1a0b44",
+                  "rule_id": "c0ffee00-0000-4000-8000-000000000001",
+                  "status": "acknowledged",
+                  "merchant_id": null,
+                  "card_token": "c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00",
+                  "event_id": "3b7f0d0e-5c9a-4c27-a1b1-f0f3d2a9e811",
+                  "feature_snapshot": {
+                    "card_cnt_1m": 6
+                  },
+                  "created_at": "2026-11-24T18:01:12.418Z",
+                  "resolved_at": null,
+                  "acknowledged_at": "2026-11-24T18:05:00.000Z",
+                  "acknowledged_by": "analyst@featurestore.local",
+                  "resolved_by": null,
+                  "resolution_note": null
                 }
               }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
+            },
+            "headers": {
+              "X-Request-ID": {
+                "description": "Correlation id. Echoed from the request or generated when the header is empty.",
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
+                  "type": "string"
+                },
+                "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
               }
             }
-          },
-          "404": {
-            "description": "Unknown alert"
-          },
-          "409": {
-            "description": "Invalid transition"
           },
           "422": {
-            "description": "Missing or invalid note / headers"
+            "$ref": "#/components/responses/ValidationError"
           },
           "401": {
-            "description": "Missing credentials or invalid session",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
           },
           "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/RateLimited"
           },
           "503": {
-            "description": "Upstream or catalog unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/UpstreamUnavailable"
           },
           "504": {
-            "description": "Upstream timeout",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/UpstreamTimeout"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         },
         "security": [
-          {
-            "ApiKey": []
-          },
           {
             "SessionCookie": []
           }
@@ -882,11 +959,15 @@
     },
     "/v1/rules": {
       "get": {
-        "summary": "List Rules",
+        "tags": [
+          "rules"
+        ],
+        "summary": "List rules",
+        "description": "List alert rules and their conditions. Rules are data. Requires a session cookie.",
         "operationId": "list_rules_v1_rules_get",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "Seeded rules.",
             "content": {
               "application/json": {
                 "schema": {
@@ -895,65 +976,72 @@
                   },
                   "type": "array",
                   "title": "Response List Rules V1 Rules Get"
-                }
+                },
+                "example": [
+                  {
+                    "rule_id": "c0ffee00-0000-4000-8000-000000000001",
+                    "name": "card_velocity_burst",
+                    "entity": "card",
+                    "enabled": true,
+                    "conditions": [
+                      {
+                        "feature_name": "card_cnt_1m",
+                        "comparison": "gt",
+                        "threshold": 5
+                      }
+                    ]
+                  },
+                  {
+                    "rule_id": "c0ffee00-0000-4000-8000-000000000003",
+                    "name": "merchant_decline_wave",
+                    "entity": "merchant",
+                    "enabled": true,
+                    "conditions": [
+                      {
+                        "feature_name": "merchant_decline_rate_24h",
+                        "comparison": "gt",
+                        "threshold": 0.35
+                      },
+                      {
+                        "feature_name": "merchant_cnt_24h",
+                        "comparison": "ge",
+                        "threshold": 20
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
               }
             }
           },
           "401": {
-            "description": "Missing credentials or invalid session",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Forbidden"
           },
           "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/RateLimited"
           },
           "503": {
-            "description": "Upstream or catalog unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/UpstreamUnavailable"
           },
           "504": {
-            "description": "Upstream timeout",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/UpstreamTimeout"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         },
         "security": [
-          {
-            "ApiKey": []
-          },
           {
             "SessionCookie": []
           }
@@ -973,11 +1061,15 @@
     },
     "/v1/catalog": {
       "get": {
-        "summary": "Get Catalog",
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Feature catalog",
+        "description": "List feature definitions and versions. Requires a session cookie.",
         "operationId": "get_catalog_v1_catalog_get",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "Registry rows.",
             "content": {
               "application/json": {
                 "schema": {
@@ -986,65 +1078,58 @@
                   },
                   "type": "array",
                   "title": "Response Get Catalog V1 Catalog Get"
-                }
+                },
+                "example": [
+                  {
+                    "name": "card_cnt_1m",
+                    "entity": "card",
+                    "kind": "stream",
+                    "agg": "count",
+                    "default_value": 0,
+                    "version": 1,
+                    "window_ms": 60000,
+                    "stale_after_ms": 5000
+                  },
+                  {
+                    "name": "geo_velocity_kmh",
+                    "entity": "card",
+                    "kind": "on_demand",
+                    "agg": "geo_velocity",
+                    "default_value": null,
+                    "version": 1,
+                    "window_ms": null,
+                    "stale_after_ms": null
+                  }
+                ]
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
               }
             }
           },
           "401": {
-            "description": "Missing credentials or invalid session",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Forbidden"
           },
           "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/RateLimited"
           },
           "503": {
-            "description": "Upstream or catalog unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+            "$ref": "#/components/responses/UpstreamUnavailable"
           },
-          "504": {
-            "description": "Upstream timeout",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         },
         "security": [
-          {
-            "ApiKey": []
-          },
           {
             "SessionCookie": []
           }
@@ -1064,52 +1149,133 @@
     },
     "/v1/stream/alerts": {
       "get": {
-        "summary": "Stream Alerts",
+        "tags": [
+          "stream"
+        ],
+        "summary": "Alert stream",
+        "description": "Server-Sent Events of alert and stats frames. Requires a session cookie. Payloads: docs/asyncapi/alerts-stream.yaml.",
         "operationId": "stream_alerts_v1_stream_alerts_get",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "SSE stream. See docs/asyncapi/alerts-stream.yaml.",
             "content": {
-              "application/json": {
-                "schema": {}
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "event: alert\nid: 42\ndata: {\"id\":42,\"op\":\"created\",\"alert_id\":\"6a4e2f0c-1d8b-4a37-9b9e-2c7f5e1a0b44\",\"rule_id\":\"c0ffee00-0000-4000-8000-000000000001\",\"rule_name\":\"card_velocity_burst\",\"status\":\"open\",\"entity\":\"card\",\"entity_id\":\"c0ff\u2026e00\",\"created_at\":\"2026-11-24T18:01:12.418Z\"}\n\n"
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "503": {
+            "$ref": "#/components/responses/UpstreamUnavailable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
-        }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Correlation id. Generated when the header is empty."
+          }
+        ]
       }
     },
     "/v1/stream/system": {
       "get": {
-        "summary": "Stream System",
+        "tags": [
+          "stream"
+        ],
+        "summary": "System stream",
+        "description": "Server-Sent Events of system state (snapshot and change). Requires a session cookie. Payloads: docs/asyncapi/system-stream.yaml.",
         "operationId": "stream_system_v1_stream_system_get",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "SSE stream. See docs/asyncapi/system-stream.yaml.",
             "content": {
-              "application/json": {
-                "schema": {}
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "event: snapshot\ndata: {\"mode\":\"normal\",\"components\":[{\"name\":\"gateway\",\"status\":\"up\",\"checked_at\":\"2026-11-24T18:01:12.418Z\",\"lag\":null}]}\n\n"
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "503": {
+            "$ref": "#/components/responses/UpstreamUnavailable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
-        }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Correlation id. Generated when the header is empty."
+          }
+        ]
       }
     }
   },
   "components": {
     "schemas": {
-      "HTTPValidationError": {
-        "properties": {
-          "detail": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationError"
-            },
-            "type": "array",
-            "title": "Detail"
-          }
-        },
-        "type": "object",
-        "title": "HTTPValidationError"
-      },
       "LoginBody": {
         "properties": {
           "email": {
@@ -1200,46 +1366,6 @@
         ],
         "title": "ReadyBody",
         "description": "``GET /ready`` body."
-      },
-      "ValidationError": {
-        "properties": {
-          "loc": {
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                }
-              ]
-            },
-            "type": "array",
-            "title": "Location"
-          },
-          "msg": {
-            "type": "string",
-            "title": "Message"
-          },
-          "type": {
-            "type": "string",
-            "title": "Error Type"
-          },
-          "input": {
-            "title": "Input"
-          },
-          "ctx": {
-            "type": "object",
-            "title": "Context"
-          }
-        },
-        "type": "object",
-        "required": [
-          "loc",
-          "msg",
-          "type"
-        ],
-        "title": "ValidationError"
       },
       "AlertDetailOut": {
         "properties": {
@@ -1881,6 +2007,359 @@
         "name": "fs_session",
         "description": "Operator JWT session cookie (ADR-020)."
       }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Missing credentials, invalid session, or bad login.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetails"
+            },
+            "examples": {
+              "unauthorized": {
+                "summary": "Missing credentials",
+                "value": {
+                  "type": "unauthorized",
+                  "title": "missing credentials",
+                  "status": 401,
+                  "request_id": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22",
+                  "errors": []
+                }
+              }
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Unknown API key, insufficient role, or missing CSRF header.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetails"
+            },
+            "examples": {
+              "forbidden": {
+                "summary": "Not allowed",
+                "value": {
+                  "type": "forbidden",
+                  "title": "forbidden",
+                  "status": 403,
+                  "request_id": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22",
+                  "errors": []
+                }
+              }
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "The resource id is unknown. Do not retry it.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetails"
+            },
+            "examples": {
+              "not_found": {
+                "summary": "Unknown alert",
+                "value": {
+                  "type": "not_found",
+                  "title": "alert not found",
+                  "status": 404,
+                  "request_id": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22",
+                  "errors": []
+                }
+              }
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "The state change conflicts with the current resource.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetails"
+            },
+            "examples": {
+              "invalid_transition": {
+                "summary": "Alert status change is not allowed",
+                "value": {
+                  "type": "invalid_transition",
+                  "title": "invalid transition",
+                  "status": 409,
+                  "request_id": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22",
+                  "errors": []
+                }
+              },
+              "conflict": {
+                "summary": "Generic conflict",
+                "value": {
+                  "type": "conflict",
+                  "title": "conflict",
+                  "status": 409,
+                  "request_id": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22",
+                  "errors": []
+                }
+              }
+            }
+          }
+        }
+      },
+      "ValidationError": {
+        "description": "Body, query, or header failed schema or business validation.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetails"
+            },
+            "examples": {
+              "validation_error": {
+                "summary": "Field validation failed",
+                "value": {
+                  "type": "validation_error",
+                  "title": "Request validation failed",
+                  "status": 422,
+                  "request_id": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22",
+                  "errors": [
+                    {
+                      "field": "note",
+                      "message": "note is required when resolving (3\u2013500 characters)"
+                    }
+                  ]
+                }
+              },
+              "bad_request": {
+                "summary": "Malformed request outside the schema",
+                "value": {
+                  "type": "bad_request",
+                  "title": "malformed request",
+                  "status": 400,
+                  "request_id": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22",
+                  "errors": []
+                }
+              },
+              "http_error": {
+                "summary": "Unmapped HTTP status",
+                "value": {
+                  "type": "http_error",
+                  "title": "http error",
+                  "status": 400,
+                  "request_id": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22",
+                  "errors": []
+                }
+              }
+            }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "The client exceeded a gateway rate limit. Honour Retry-After.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
+          },
+          "Retry-After": {
+            "description": "Seconds to wait before retrying.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetails"
+            },
+            "examples": {
+              "rate_limited": {
+                "summary": "Too many requests",
+                "value": {
+                  "type": "rate_limited",
+                  "title": "rate limit exceeded",
+                  "status": 429,
+                  "request_id": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22",
+                  "errors": []
+                }
+              }
+            }
+          }
+        }
+      },
+      "InternalError": {
+        "description": "Unexpected exception. Retry once and quote request_id.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetails"
+            },
+            "examples": {
+              "internal_error": {
+                "summary": "Unhandled exception",
+                "value": {
+                  "type": "internal_error",
+                  "title": "Internal server error",
+                  "status": 500,
+                  "request_id": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22",
+                  "errors": []
+                }
+              }
+            }
+          }
+        }
+      },
+      "UpstreamUnavailable": {
+        "description": "A dependency is down. Retry with backoff.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetails"
+            },
+            "examples": {
+              "upstream_unavailable": {
+                "summary": "Dependency unavailable",
+                "value": {
+                  "type": "upstream_unavailable",
+                  "title": "upstream unavailable",
+                  "status": 503,
+                  "request_id": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22",
+                  "errors": []
+                }
+              }
+            }
+          }
+        }
+      },
+      "UpstreamTimeout": {
+        "description": "The gateway timed out waiting for an upstream. Retry with backoff.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetails"
+            },
+            "examples": {
+              "upstream_timeout": {
+                "summary": "Upstream timed out",
+                "value": {
+                  "type": "upstream_timeout",
+                  "title": "upstream timeout",
+                  "status": 504,
+                  "request_id": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22",
+                  "errors": []
+                }
+              }
+            }
+          }
+        }
+      }
     }
-  }
+  },
+  "tags": [
+    {
+      "name": "auth",
+      "description": "Operator login, logout, and the current session."
+    },
+    {
+      "name": "features",
+      "description": "Feature lookup for scoring clients and operators."
+    },
+    {
+      "name": "alerts",
+      "description": "Alert list, detail, and status transitions."
+    },
+    {
+      "name": "rules",
+      "description": "Alert rules stored as data."
+    },
+    {
+      "name": "catalog",
+      "description": "Feature registry rows."
+    },
+    {
+      "name": "stream",
+      "description": "Server-Sent Events. Event payloads are specified in the AsyncAPI files."
+    },
+    {
+      "name": "ops",
+      "description": "Process health and readiness probes."
+    }
+  ]
 }

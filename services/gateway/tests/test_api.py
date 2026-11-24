@@ -8,10 +8,12 @@ from uuid import UUID
 
 import httpx
 import pytest
+from fastapi.routing import APIRoute
 from harness import make_settings, mount, ok_json, operator_headers, send
 from prometheus_client import CollectorRegistry
 
-from gateway.api import export_openapi
+from gateway.api import app, export_openapi
+from gateway.auth.access import AuthContext, rbac_allowed
 from gateway.logging import JsonFormatter
 from gateway.metrics import gateway_metrics
 from gateway.settings import Settings, parse_api_keys
@@ -294,5 +296,55 @@ def test_openapi_documents_the_business_routes(tmp_path: Path) -> None:
     assert "/v1/auth/logout" in document["paths"]
     assert "/v1/auth/me" in document["paths"]
     assert "/health" in document["paths"]
-    assert "security" not in document["paths"]["/health"]["get"]
-    assert "security" not in document["paths"]["/ready"]["get"]
+    assert document["paths"]["/health"]["get"]["security"] == []
+    assert document["paths"]["/ready"]["get"]["security"] == []
+    assert document["info"]["version"] == "1.0.0"
+    assert document["servers"] == [{"url": "http://localhost:8080"}]
+    alerts = document["paths"]["/v1/alerts"]["get"]
+    assert alerts["security"] == [{"SessionCookie": []}]
+    patch = document["paths"]["/v1/alerts/{alert_id}"]["patch"]
+    assert patch["security"] == [{"SessionCookie": []}]
+    assert "analyst" in patch["description"]
+    assert "X-Requested-With" in patch["description"]
+
+
+_SKIP_PREFIXES = ("/docs", "/redoc", "/openapi.json")
+
+
+def _expected_security(method: str, path: str) -> list[dict[str, list[str]]]:
+    api_key = AuthContext(kind="api_key", client="scoring")
+    session_ok = any(
+        rbac_allowed(
+            method,
+            path,
+            AuthContext(kind="session", client="operator:1", operator_id="1", role=role),
+        )
+        for role in ("viewer", "analyst", "admin")
+    )
+    schemes: list[dict[str, list[str]]] = []
+    if rbac_allowed(method, path, api_key):
+        schemes.append({"ApiKey": []})
+    if session_ok:
+        schemes.append({"SessionCookie": []})
+    return schemes
+
+
+def test_openapi_security_matches_rbac() -> None:
+    document = app.openapi()
+    seen = False
+    for route in app.routes:
+        if not isinstance(route, APIRoute) or not route.include_in_schema:
+            continue
+        if route.path.startswith(_SKIP_PREFIXES):
+            continue
+        path_item = document["paths"][route.path]
+        for method in route.methods:
+            if method in {"HEAD", "OPTIONS"}:
+                continue
+            operation = path_item[method.lower()]
+            assert "security" in operation
+            assert operation["security"] == _expected_security(method, route.path)
+            assert operation.get("summary")
+            assert operation.get("description")
+            seen = True
+    assert seen

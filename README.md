@@ -93,8 +93,10 @@ make test-int              # integration tests (require docker)
 
 Interactive API docs: ingestion http://localhost:8000/docs, features
 http://localhost:8001/docs, detection http://localhost:8002/docs, gateway
-http://localhost:8080/docs (requests need `X-API-Key`, dev keys in
-`infra/.env.example`) — exported specs in [docs/openapi/](docs/openapi/).
+http://localhost:8080/docs. Swagger UI is public to read. Calling an operator
+route needs a session cookie; `POST /v1/features` accepts `X-API-Key` or a
+session (dev key in `infra/.env.example`). Exported specs:
+[docs/openapi/](docs/openapi/).
 
 ## Metrics
 
@@ -123,6 +125,19 @@ histogram_quantile(0.95, sum by (le) (rate(features_event_to_online_seconds_buck
 
 The same expressions are recorded as `features_request_duration_seconds:p99` and
 `features_event_to_online_seconds:p95`.
+
+## Documentation
+
+Read in this order:
+
+1. [Getting started](docs/guides/getting-started.md) — checkout to the first authenticated call
+2. [Alert triage tutorial](docs/guides/alert-triage-tutorial.md) — operator workflow
+3. [Gateway reference](docs/openapi/gateway.json) — OpenAPI for the public API (`make docs-build` writes a Redoc page)
+4. [Error taxonomy](docs/api-errors.md)
+5. [Changelog](docs/api-changelog.md)
+6. [Architecture](docs/architecture.md)
+
+Live streams are specified in [docs/asyncapi/](docs/asyncapi/). `make docs-lint` checks the OpenAPI and AsyncAPI files.
 
 ## Repository layout
 

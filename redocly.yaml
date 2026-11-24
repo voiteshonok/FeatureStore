@@ -1,0 +1,12 @@
+extends:
+  - recommended
+
+rules:
+  operation-summary: error
+  operation-operationId: error
+  no-invalid-media-type-examples: error
+  security-defined: error
+  operation-4xx-response: error
+  tag-description: warn
+  # The public and internal servers are local by design.
+  no-server-example.com: off

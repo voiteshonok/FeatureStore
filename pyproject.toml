@@ -30,6 +30,7 @@ dev = [
     "testcontainers[clickhouse,kafka,postgres,redis]>=4.15.0",
     "types-PyYAML>=6.0",
     "baseline",
+    "jsonschema>=4.26.0",
 ]
 
 [tool.pytest.ini_options]
@@ -44,6 +45,7 @@ testpaths = [
     "experiments/load/tests",
     "experiments/k1_k2/tests",
     "tools/pan_scan/tests",
+    "tests/docs",
     "tests/e2e",
 ]
 pythonpath = ["tools", "experiments/load", "experiments/k1_k2"]

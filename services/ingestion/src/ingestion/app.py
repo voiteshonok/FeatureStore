@@ -10,9 +10,11 @@ from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import FastAPI, Request
+from fastapi import Body, FastAPI, Request
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from psycopg import AsyncConnection
 from psycopg.rows import TupleRow
@@ -20,12 +22,27 @@ from psycopg_pool import AsyncConnectionPool
 from pydantic import BaseModel
 
 from ingestion.errors import install_error_handlers, install_request_id_middleware
+from ingestion.examples import (
+    ACCEPTED_EXAMPLE,
+    API_DESCRIPTION,
+    DUPLICATE_EXAMPLE,
+    ERROR_CODES,
+    EVENT_DESCRIPTION,
+    HEALTH_DESCRIPTION,
+    HEALTH_EXAMPLE,
+    OPENAPI_TAGS,
+    PAYMENT_EXAMPLES,
+    READY_DESCRIPTION,
+    READY_DOWN,
+    READY_OK,
+)
 from ingestion.idempotency import AcceptResult, IdempotencyStore
 from ingestion.logging import JsonFormatter, PanMaskFilter
 from ingestion.metrics import METRICS, IngestionMetrics, start_metrics_server
 from ingestion.publisher import KafkaPublisher, PublishError
 from ingestion.tokenize import load_key, to_event
 from schemas import AppProblem, FieldError, PaymentIn, check_event_time
+from schemas.openapi_problems import finalize_documented_openapi
 
 _READY_TIMEOUT_S = 1.0
 _DELETE_EXPIRED = "SELECT ingestion.delete_expired_idempotency_keys()"
@@ -153,17 +170,53 @@ def create_app(
     include_test_routes: bool = False,
 ) -> FastAPI:
     """Build the ingestion API. Importing this module does not open connections."""
-    app = FastAPI(title="ingestion", lifespan=_lifespan)
+    app = FastAPI(
+        title="Feature Store Ingestion",
+        version="1.0.0",
+        description=API_DESCRIPTION,
+        servers=[{"url": "http://localhost:8000"}],
+        license_info={"name": "MIT", "identifier": "MIT"},
+        openapi_tags=OPENAPI_TAGS,
+        lifespan=_lifespan,
+    )
     app.state.settings = settings or Settings.from_env()
     app.state.metrics = METRICS if metrics is None else metrics
     install_request_id_middleware(app)
     install_error_handlers(app)
 
-    @app.get("/health")
+    @app.get(
+        "/health",
+        tags=["ops"],
+        summary="Health",
+        description=HEALTH_DESCRIPTION,
+        openapi_extra={"security": []},
+        responses={
+            200: {
+                "description": "Process is running.",
+                "content": {"application/json": {"example": HEALTH_EXAMPLE}},
+            }
+        },
+    )
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.get("/ready")
+    @app.get(
+        "/ready",
+        tags=["ops"],
+        summary="Ready",
+        description=READY_DESCRIPTION,
+        openapi_extra={"security": []},
+        responses={
+            200: {
+                "description": "Kafka and Postgres are up.",
+                "content": {"application/json": {"example": READY_OK}},
+            },
+            503: {
+                "description": "A dependency is down.",
+                "content": {"application/json": {"example": READY_DOWN}},
+            },
+        },
+    )
     async def ready(request: Request) -> JSONResponse:
         postgres_ok = await _postgres_ready(request.app.state.pool)
         kafka_ok = await request.app.state.publisher.ready()
@@ -175,8 +228,38 @@ def create_app(
         code = 200 if postgres_ok and kafka_ok else 503
         return JSONResponse(status_code=code, content=body)
 
-    @app.post("/v1/events", status_code=202, response_model=EventAccepted)
-    async def post_event(payment: PaymentIn, request: Request) -> EventAccepted:
+    @app.post(
+        "/v1/events",
+        status_code=202,
+        response_model=EventAccepted,
+        tags=["events"],
+        summary="Accept payment",
+        description=EVENT_DESCRIPTION,
+        openapi_extra={"security": []},
+        responses={
+            202: {
+                "description": "Accepted, or recognized as a duplicate event_id.",
+                "content": {
+                    "application/json": {
+                        "examples": {
+                            "accepted": {
+                                "summary": "First delivery",
+                                "value": ACCEPTED_EXAMPLE,
+                            },
+                            "duplicate": {
+                                "summary": "Same event_id again",
+                                "value": DUPLICATE_EXAMPLE,
+                            },
+                        }
+                    }
+                },
+            }
+        },
+    )
+    async def post_event(
+        payment: Annotated[PaymentIn, Body(openapi_examples=PAYMENT_EXAMPLES)],
+        request: Request,
+    ) -> EventAccepted:
         started = time.perf_counter()
         metrics: IngestionMetrics = request.app.state.metrics
         status_code = 500
@@ -222,7 +305,34 @@ def create_app(
         async def boom() -> None:
             raise RuntimeError("boom pan 4111111111111111")
 
+    _bind_openapi(app)
     return app
+
+
+def _bind_openapi(app: FastAPI) -> None:
+    def openapi() -> dict[str, Any]:
+        cached = app.openapi_schema
+        if isinstance(cached, dict):
+            return cached
+        schema = get_openapi(
+            title=app.title,
+            version=app.version,
+            description=app.description,
+            routes=app.routes,
+            tags=app.openapi_tags,
+            servers=app.servers,
+            license_info=app.license_info,
+        )
+        finalize_documented_openapi(
+            schema,
+            tags=OPENAPI_TAGS,
+            errors=ERROR_CODES,
+            public=True,
+        )
+        app.openapi_schema = schema
+        return schema
+
+    app.openapi = openapi  # type: ignore[method-assign]
 
 
 def export_openapi(path: str) -> None:

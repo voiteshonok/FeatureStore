@@ -8,11 +8,13 @@ from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Annotated, Any
 from uuid import uuid4
 
 import uvicorn
 from aiokafka.admin import AIOKafkaAdminClient
-from fastapi import FastAPI, Request
+from fastapi import Body, FastAPI, Request
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from psycopg import AsyncConnection
 from psycopg.rows import TupleRow
@@ -21,10 +23,25 @@ from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
 from features.errors import install_error_handlers, install_request_id_middleware
+from features.examples import (
+    API_DESCRIPTION,
+    ERROR_CODES,
+    FEATURE_EXAMPLES,
+    FEATURE_RESPONSE_EXAMPLE,
+    FEATURES_DESCRIPTION,
+    HEALTH_DESCRIPTION,
+    HEALTH_EXAMPLE,
+    OPENAPI_TAGS,
+    READY_DESCRIPTION,
+    READY_DOWN,
+    READY_OK,
+    apply_response_examples,
+)
 from features.freshness import serve
 from features.metrics import API_METRICS, ApiMetrics, start_metrics_server
 from features.settings import Settings
 from schemas import CATALOG, AppProblem, FeatureRequest, FeatureResponse, FeatureSpec, mask_pans
+from schemas.openapi_problems import finalize_documented_openapi
 
 _READY_TIMEOUT_S = 1.0
 _PORT = 8001
@@ -266,18 +283,54 @@ def create_app(
     include_test_routes: bool = False,
 ) -> FastAPI:
     """Build the feature API. Importing this module does not open connections."""
-    app = FastAPI(title="features", lifespan=_lifespan)
+    app = FastAPI(
+        title="Feature Store Features",
+        version="1.0.0",
+        description=API_DESCRIPTION,
+        servers=[{"url": "http://localhost:8001"}],
+        license_info={"name": "MIT", "identifier": "MIT"},
+        openapi_tags=OPENAPI_TAGS,
+        lifespan=_lifespan,
+    )
     app.state.settings = settings or Settings.from_env()
     app.state.metrics = API_METRICS if metrics is None else metrics
     configure_logging()
     install_request_id_middleware(app)
     install_error_handlers(app)
 
-    @app.get("/health")
+    @app.get(
+        "/health",
+        tags=["ops"],
+        summary="Health",
+        description=HEALTH_DESCRIPTION,
+        openapi_extra={"security": []},
+        responses={
+            200: {
+                "description": "Process is running.",
+                "content": {"application/json": {"example": HEALTH_EXAMPLE}},
+            }
+        },
+    )
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.get("/ready")
+    @app.get(
+        "/ready",
+        tags=["ops"],
+        summary="Ready",
+        description=READY_DESCRIPTION,
+        openapi_extra={"security": []},
+        responses={
+            200: {
+                "description": "Redis and Postgres are up.",
+                "content": {"application/json": {"example": READY_OK}},
+            },
+            503: {
+                "description": "A dependency is down.",
+                "content": {"application/json": {"example": READY_DOWN}},
+            },
+        },
+    )
     async def ready(request: Request) -> JSONResponse:
         redis_ok = await _redis_ready(request.app.state.redis)
         postgres_ok = await _postgres_ready(request.app.state.pool)
@@ -288,8 +341,24 @@ def create_app(
         }
         return JSONResponse(status_code=200 if redis_ok and postgres_ok else 503, content=body)
 
-    @app.post("/v1/features", response_model=FeatureResponse)
-    async def post_features(body: FeatureRequest, request: Request) -> FeatureResponse:
+    @app.post(
+        "/v1/features",
+        response_model=FeatureResponse,
+        tags=["features"],
+        summary="Read features",
+        description=FEATURES_DESCRIPTION,
+        openapi_extra={"security": []},
+        responses={
+            200: {
+                "description": "Feature vector.",
+                "content": {"application/json": {"example": FEATURE_RESPONSE_EXAMPLE}},
+            }
+        },
+    )
+    async def post_features(
+        body: Annotated[FeatureRequest, Body(openapi_examples=FEATURE_EXAMPLES)],
+        request: Request,
+    ) -> FeatureResponse:
         started = time.perf_counter()
         request_id = uuid4()
         metrics: ApiMetrics = request.app.state.metrics
@@ -320,7 +389,35 @@ def create_app(
         async def boom() -> None:
             raise RuntimeError("boom pan 4111111111111111")
 
+    _bind_openapi(app)
     return app
+
+
+def _bind_openapi(app: FastAPI) -> None:
+    def openapi() -> dict[str, Any]:
+        cached = app.openapi_schema
+        if isinstance(cached, dict):
+            return cached
+        schema = get_openapi(
+            title=app.title,
+            version=app.version,
+            description=app.description,
+            routes=app.routes,
+            tags=app.openapi_tags,
+            servers=app.servers,
+            license_info=app.license_info,
+        )
+        finalize_documented_openapi(
+            schema,
+            tags=OPENAPI_TAGS,
+            errors=ERROR_CODES,
+            public=True,
+        )
+        apply_response_examples(schema)
+        app.openapi_schema = schema
+        return schema
+
+    app.openapi = openapi  # type: ignore[method-assign]
 
 
 def export_openapi(path: str) -> None:

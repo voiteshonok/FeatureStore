@@ -1,17 +1,31 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "features",
-    "version": "0.1.0"
+    "title": "Feature Store Features",
+    "description": "Internal feature lookup. Scoring clients reach this API through the gateway, not directly. POST keeps the card token and coordinates out of URLs and logs.",
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    },
+    "version": "1.0.0"
   },
+  "servers": [
+    {
+      "url": "http://localhost:8001"
+    }
+  ],
   "paths": {
     "/health": {
       "get": {
+        "tags": [
+          "ops"
+        ],
         "summary": "Health",
+        "description": "The process is up. This probe does not check Redis or Postgres.",
         "operationId": "health_health_get",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "Process is running.",
             "content": {
               "application/json": {
                 "schema": {
@@ -20,38 +34,142 @@
                   },
                   "type": "object",
                   "title": "Response Health Health Get"
+                },
+                "example": {
+                  "status": "ok"
                 }
               }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
+              }
             }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
-        }
+        },
+        "security": [],
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Correlation id. Generated when the header is empty."
+          }
+        ]
       }
     },
     "/ready": {
       "get": {
+        "tags": [
+          "ops"
+        ],
         "summary": "Ready",
+        "description": "Redis and Postgres each answer within one second.",
         "operationId": "ready_ready_get",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "Redis and Postgres are up.",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {},
+                "example": {
+                  "status": "ready",
+                  "redis": "ok",
+                  "postgres": "ok"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
               }
             }
+          },
+          "503": {
+            "description": "A dependency is down.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "not_ready",
+                  "redis": "down",
+                  "postgres": "ok"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
-        }
+        },
+        "security": [],
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Correlation id. Generated when the header is empty."
+          }
+        ]
       }
     },
     "/v1/features": {
       "post": {
-        "summary": "Post Features",
+        "tags": [
+          "features"
+        ],
+        "summary": "Read features",
+        "description": "Read the feature vector for a card, a merchant, or both. POST is used because the body carries a card token and coordinates: they must not appear in URLs, access logs, or proxy caches.",
         "operationId": "post_features_v1_features_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/FeatureRequest"
+              },
+              "examples": {
+                "typical": {
+                  "summary": "Card and merchant",
+                  "value": {
+                    "card_token": "c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00",
+                    "merchant_id": "m7",
+                    "ts": "2026-11-24T18:00:00.000Z",
+                    "lat": 54.6872,
+                    "lon": 25.2797
+                  }
+                },
+                "edge": {
+                  "summary": "Merchant only",
+                  "value": {
+                    "merchant_id": "m7",
+                    "ts": "2026-11-24T18:00:00.000Z"
+                  }
+                }
               }
             }
           },
@@ -59,26 +177,69 @@
         },
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "Feature vector.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/FeatureResponse"
+                },
+                "example": {
+                  "request_id": "3b7f0d0e-5c9a-4c27-a1b1-f0f3d2a9e812",
+                  "features": {
+                    "card_cnt_1m": {
+                      "value": 4,
+                      "as_of": "2026-11-24T17:59:58.000Z",
+                      "age_ms": 2140,
+                      "status": "fresh"
+                    },
+                    "merchant_cnt_24h": {
+                      "value": 1312,
+                      "as_of": "2026-11-24T17:59:59.000Z",
+                      "age_ms": 1020,
+                      "status": "fresh"
+                    },
+                    "geo_velocity_kmh": {
+                      "value": 0.0,
+                      "as_of": null,
+                      "age_ms": null,
+                      "status": "fresh"
+                    }
+                  }
                 }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
               }
             }
           },
           "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "503": {
+            "$ref": "#/components/responses/UpstreamUnavailable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
-        }
+        },
+        "security": [],
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Correlation id. Generated when the header is empty."
+          }
+        ]
       }
     }
   },
@@ -233,59 +394,193 @@
         ],
         "title": "FeatureValue"
       },
-      "HTTPValidationError": {
+      "FieldError": {
+        "additionalProperties": false,
+        "description": "One validation field failure (422 only).",
         "properties": {
-          "detail": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationError"
-            },
-            "type": "array",
-            "title": "Detail"
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
           }
         },
-        "type": "object",
-        "title": "HTTPValidationError"
-      },
-      "ValidationError": {
-        "properties": {
-          "loc": {
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                }
-              ]
-            },
-            "type": "array",
-            "title": "Location"
-          },
-          "msg": {
-            "type": "string",
-            "title": "Message"
-          },
-          "type": {
-            "type": "string",
-            "title": "Error Type"
-          },
-          "input": {
-            "title": "Input"
-          },
-          "ctx": {
-            "type": "object",
-            "title": "Context"
-          }
-        },
-        "type": "object",
         "required": [
-          "loc",
-          "msg",
-          "type"
+          "field",
+          "message"
         ],
-        "title": "ValidationError"
+        "title": "FieldError",
+        "type": "object"
+      },
+      "ProblemDetails": {
+        "additionalProperties": false,
+        "description": "Uniform error body for all HTTP services.",
+        "properties": {
+          "type": {
+            "title": "Type",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "integer"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/FieldError"
+            },
+            "title": "Errors",
+            "type": "array"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "request_id"
+        ],
+        "title": "ProblemDetails",
+        "type": "object"
+      }
+    },
+    "responses": {
+      "ValidationError": {
+        "description": "Body, query, or header failed schema or business validation.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetails"
+            },
+            "examples": {
+              "validation_error": {
+                "summary": "Field validation failed",
+                "value": {
+                  "type": "validation_error",
+                  "title": "Request validation failed",
+                  "status": 422,
+                  "request_id": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22",
+                  "errors": [
+                    {
+                      "field": "note",
+                      "message": "note is required when resolving (3\u2013500 characters)"
+                    }
+                  ]
+                }
+              },
+              "bad_request": {
+                "summary": "Malformed request outside the schema",
+                "value": {
+                  "type": "bad_request",
+                  "title": "malformed request",
+                  "status": 400,
+                  "request_id": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22",
+                  "errors": []
+                }
+              },
+              "http_error": {
+                "summary": "Unmapped HTTP status",
+                "value": {
+                  "type": "http_error",
+                  "title": "http error",
+                  "status": 400,
+                  "request_id": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22",
+                  "errors": []
+                }
+              }
+            }
+          }
+        }
+      },
+      "InternalError": {
+        "description": "Unexpected exception. Retry once and quote request_id.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetails"
+            },
+            "examples": {
+              "internal_error": {
+                "summary": "Unhandled exception",
+                "value": {
+                  "type": "internal_error",
+                  "title": "Internal server error",
+                  "status": 500,
+                  "request_id": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22",
+                  "errors": []
+                }
+              }
+            }
+          }
+        }
+      },
+      "UpstreamUnavailable": {
+        "description": "A dependency is down. Retry with backoff.",
+        "headers": {
+          "X-Request-ID": {
+            "description": "Correlation id. Echoed from the request or generated when the header is empty.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetails"
+            },
+            "examples": {
+              "upstream_unavailable": {
+                "summary": "Dependency unavailable",
+                "value": {
+                  "type": "upstream_unavailable",
+                  "title": "upstream unavailable",
+                  "status": 503,
+                  "request_id": "6f1c2a40-9b17-4e5a-8c31-0a6d4e8b7f22",
+                  "errors": []
+                }
+              }
+            }
+          }
+        }
       }
     }
-  }
+  },
+  "tags": [
+    {
+      "name": "features",
+      "description": "Feature lookup by card token, merchant id, or both."
+    },
+    {
+      "name": "ops",
+      "description": "Process health and readiness probes."
+    }
+  ]
 }

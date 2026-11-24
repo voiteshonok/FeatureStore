@@ -17,7 +17,7 @@ from uuid import UUID, uuid4
 
 import httpx
 import uvicorn
-from fastapi import FastAPI, Query
+from fastapi import Body, FastAPI, Query
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from psycopg import AsyncConnection
@@ -41,6 +41,48 @@ from gateway.auth.password import passwords_match
 from gateway.auth.secret import JwtSecretError, load_jwt_secret
 from gateway.catalog import CatalogUnavailable, read_catalog
 from gateway.errors import install_error_handlers, problem_response, unhandled_response
+from gateway.examples import (
+    ALERT_ACKNOWLEDGED,
+    ALERT_DETAIL_EXAMPLE,
+    ALERT_LIST_EXAMPLE,
+    ALERT_SSE_EXAMPLE,
+    API_DESCRIPTION,
+    CATALOG_DESCRIPTION,
+    CATALOG_EXAMPLE,
+    ERROR_CODES,
+    FEATURE_EXAMPLES,
+    FEATURE_RESPONSE_EXAMPLE,
+    FEATURES_DESCRIPTION,
+    GET_ALERT_DESCRIPTION,
+    HEALTH_DESCRIPTION,
+    HEALTH_EXAMPLE,
+    LIST_ALERTS_DESCRIPTION,
+    LOGIN_204_DESCRIPTION,
+    LOGIN_COOKIE,
+    LOGIN_DESCRIPTION,
+    LOGIN_EXAMPLES,
+    LOGOUT_204_DESCRIPTION,
+    LOGOUT_COOKIE,
+    LOGOUT_DESCRIPTION,
+    ME_DESCRIPTION,
+    ME_EXAMPLE,
+    OPENAPI_TAGS,
+    PATCH_DESCRIPTION,
+    PATCH_EXAMPLES,
+    READY_DESCRIPTION,
+    READY_DOWN,
+    READY_OK,
+    RULE_CARD,
+    RULE_MERCHANT,
+    RULES_DESCRIPTION,
+    SEC_EITHER,
+    SEC_PUBLIC,
+    SEC_SESSION,
+    STREAM_ALERTS_DESCRIPTION,
+    STREAM_SYSTEM_DESCRIPTION,
+    SYSTEM_SSE_EXAMPLE,
+    apply_response_examples,
+)
 from gateway.logging import configure_logging
 from gateway.metrics import METRICS, GatewayMetrics, start_metrics_server
 from gateway.models import (
@@ -65,6 +107,7 @@ from gateway.system.collector import SystemCollector
 from gateway.system.hub import SubscriberFull, SystemHub
 from gateway.system.sse import sse_frames
 from schemas import FeatureRequest, FeatureResponse
+from schemas.openapi_problems import ensure_explicit_security, finalize_documented_openapi
 
 _PORT = 8080
 _READY_BUDGET_S = 1.0
@@ -91,14 +134,6 @@ _BUSINESS_PATHS = (
     "/v1/auth/logout",
     "/v1/auth/me",
 )
-_METHODS = frozenset({"get", "post", "patch", "put", "delete", "head", "options"})
-_GATEWAY_ERRORS = {
-    "401": "Missing credentials or invalid session",
-    "403": "Forbidden",
-    "429": "Rate limit exceeded",
-    "503": "Upstream or catalog unavailable",
-    "504": "Upstream timeout",
-}
 
 
 def client_key(request: Request) -> str:
@@ -505,52 +540,124 @@ def _install_routes(app: FastAPI, limiter: Limiter, rate: str) -> None:
         error_message="rate limit exceeded",
     )
 
-    @app.get("/health")
+    @app.get(
+        "/health",
+        tags=["ops"],
+        summary="Health",
+        description=HEALTH_DESCRIPTION,
+        openapi_extra=SEC_PUBLIC,
+        responses={
+            200: {
+                "description": "Process is running.",
+                "content": {"application/json": {"example": HEALTH_EXAMPLE}},
+            }
+        },
+    )
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
     @app.get(
         "/ready",
-        responses={200: {"model": ReadyBody}, 503: {"model": ReadyBody}},
+        tags=["ops"],
+        summary="Ready",
+        description=READY_DESCRIPTION,
+        openapi_extra=SEC_PUBLIC,
+        responses={
+            200: {
+                "description": "Dependencies are up.",
+                "model": ReadyBody,
+                "content": {"application/json": {"example": READY_OK}},
+            },
+            503: {
+                "description": "A dependency is down.",
+                "model": ReadyBody,
+                "content": {"application/json": {"example": READY_DOWN}},
+            },
+        },
     )
     async def ready(request: Request) -> JSONResponse:
         return await _ready(request)
 
-    @app.post("/v1/auth/login", status_code=204)
+    @app.post(
+        "/v1/auth/login",
+        status_code=204,
+        tags=["auth"],
+        summary="Log in",
+        description=LOGIN_DESCRIPTION,
+        openapi_extra=SEC_PUBLIC,
+    )
     @login_limited
     async def login(request: Request, body: LoginBody) -> Response:
         return await _login(request, body)
 
-    @app.post("/v1/auth/logout", status_code=204)
+    @app.post(
+        "/v1/auth/logout",
+        status_code=204,
+        tags=["auth"],
+        summary="Log out",
+        description=LOGOUT_DESCRIPTION,
+        openapi_extra=SEC_SESSION,
+    )
     @limited
     async def logout(request: Request) -> Response:
         return await _logout(request)
 
-    @app.get("/v1/auth/me", response_model=MeOut)
+    @app.get(
+        "/v1/auth/me",
+        response_model=MeOut,
+        tags=["auth"],
+        summary="Current operator",
+        description=ME_DESCRIPTION,
+        openapi_extra=SEC_SESSION,
+    )
     @limited
     async def me(request: Request) -> Response:
         return await _me(request)
 
-    @app.post("/v1/features")
+    @app.post(
+        "/v1/features",
+        tags=["features"],
+        summary="Read features",
+        description=FEATURES_DESCRIPTION,
+        openapi_extra=SEC_EITHER,
+    )
     @limited
     async def post_features(request: Request) -> Response:
         settings: Settings = request.app.state.settings
         return await _proxy(request, settings.features_url, "features")
 
-    @app.get("/v1/alerts")
+    @app.get(
+        "/v1/alerts",
+        tags=["alerts"],
+        summary="List alerts",
+        description=LIST_ALERTS_DESCRIPTION,
+        openapi_extra=SEC_SESSION,
+    )
     @limited
     async def list_alerts(request: Request) -> Response:
         settings: Settings = request.app.state.settings
         return await _proxy(request, settings.detection_url, "detection")
 
-    @app.get("/v1/alerts/{alert_id}")
+    @app.get(
+        "/v1/alerts/{alert_id}",
+        tags=["alerts"],
+        summary="Get alert",
+        description=GET_ALERT_DESCRIPTION,
+        openapi_extra=SEC_SESSION,
+    )
     @limited
     async def get_alert(request: Request, alert_id: str) -> Response:
         _ = alert_id
         settings: Settings = request.app.state.settings
         return await _proxy(request, settings.detection_url, "detection")
 
-    @app.patch("/v1/alerts/{alert_id}")
+    @app.patch(
+        "/v1/alerts/{alert_id}",
+        tags=["alerts"],
+        summary="Update alert status",
+        description=PATCH_DESCRIPTION,
+        openapi_extra=SEC_SESSION,
+    )
     @limited
     async def patch_alert(request: Request, alert_id: str) -> Response:
         # The id stays in the path. Detection validates it.
@@ -558,18 +665,47 @@ def _install_routes(app: FastAPI, limiter: Limiter, rate: str) -> None:
         settings: Settings = request.app.state.settings
         return await _proxy(request, settings.detection_url, "detection")
 
-    @app.get("/v1/rules")
+    @app.get(
+        "/v1/rules",
+        tags=["rules"],
+        summary="List rules",
+        description=RULES_DESCRIPTION,
+        openapi_extra=SEC_SESSION,
+    )
     @limited
     async def list_rules(request: Request) -> Response:
         settings: Settings = request.app.state.settings
         return await _proxy(request, settings.detection_url, "detection")
 
-    @app.get("/v1/catalog")
+    @app.get(
+        "/v1/catalog",
+        tags=["catalog"],
+        summary="Feature catalog",
+        description=CATALOG_DESCRIPTION,
+        openapi_extra=SEC_SESSION,
+    )
     @limited
     async def get_catalog(request: Request) -> Response:
         return await _catalog(request)
 
-    @app.get("/v1/stream/alerts")
+    @app.get(
+        "/v1/stream/alerts",
+        tags=["stream"],
+        summary="Alert stream",
+        description=STREAM_ALERTS_DESCRIPTION,
+        openapi_extra=SEC_SESSION,
+        responses={
+            200: {
+                "description": "SSE stream. See docs/asyncapi/alerts-stream.yaml.",
+                "content": {
+                    "text/event-stream": {
+                        "schema": {"type": "string"},
+                        "example": ALERT_SSE_EXAMPLE,
+                    }
+                },
+            }
+        },
+    )
     @limited
     async def stream_alerts(request: Request) -> Response:
         settings: Settings = request.app.state.settings
@@ -586,7 +722,24 @@ def _install_routes(app: FastAPI, limiter: Limiter, rate: str) -> None:
             close_after_s=close_after_s,
         )
 
-    @app.get("/v1/stream/system")
+    @app.get(
+        "/v1/stream/system",
+        tags=["stream"],
+        summary="System stream",
+        description=STREAM_SYSTEM_DESCRIPTION,
+        openapi_extra=SEC_SESSION,
+        responses={
+            200: {
+                "description": "SSE stream. See docs/asyncapi/system-stream.yaml.",
+                "content": {
+                    "text/event-stream": {
+                        "schema": {"type": "string"},
+                        "example": SYSTEM_SSE_EXAMPLE,
+                    }
+                },
+            }
+        },
+    )
     @limited
     async def stream_system(request: Request) -> Response:
         hub: SystemHub = request.app.state.system_hub
@@ -639,30 +792,88 @@ def _install_routes(app: FastAPI, limiter: Limiter, rate: str) -> None:
         )
 
 
+def _json_example(description: str, example: object) -> dict[str, Any]:
+    return {
+        "description": description,
+        "content": {"application/json": {"example": example}},
+    }
+
+
+def _cookie_response(description: str, example: str) -> dict[str, Any]:
+    return {
+        "description": description,
+        "headers": {
+            "Set-Cookie": {
+                "description": description,
+                "schema": {"type": "string"},
+                "example": example,
+            }
+        },
+    }
+
+
 def _contract_app() -> FastAPI:
     """Routes used only to build the OpenAPI document."""
-    contract = FastAPI(title="gateway", version="0.1.0")
+    contract = FastAPI(title="Feature Store Gateway", version="1.0.0")
 
-    @contract.post("/v1/auth/login", status_code=204)
-    def login(body: LoginBody) -> None:
+    @contract.post(
+        "/v1/auth/login",
+        status_code=204,
+        tags=["auth"],
+        summary="Log in",
+        description=LOGIN_DESCRIPTION,
+        openapi_extra=SEC_PUBLIC,
+        responses={204: _cookie_response(LOGIN_204_DESCRIPTION, LOGIN_COOKIE)},
+    )
+    def login(body: Annotated[LoginBody, Body(openapi_examples=LOGIN_EXAMPLES)]) -> None:
         raise RuntimeError(body.email)
 
-    @contract.post("/v1/auth/logout", status_code=204)
+    @contract.post(
+        "/v1/auth/logout",
+        status_code=204,
+        tags=["auth"],
+        summary="Log out",
+        description=LOGOUT_DESCRIPTION,
+        openapi_extra=SEC_SESSION,
+        responses={204: _cookie_response(LOGOUT_204_DESCRIPTION, LOGOUT_COOKIE)},
+    )
     def logout() -> None:
         raise RuntimeError("openapi only")
 
-    @contract.get("/v1/auth/me", response_model=MeOut)
+    @contract.get(
+        "/v1/auth/me",
+        response_model=MeOut,
+        tags=["auth"],
+        summary="Current operator",
+        description=ME_DESCRIPTION,
+        openapi_extra=SEC_SESSION,
+        responses={200: _json_example("Current operator.", ME_EXAMPLE)},
+    )
     def me() -> MeOut:
         raise RuntimeError("openapi only")
 
-    @contract.post("/v1/features", response_model=FeatureResponse)
-    def post_features(body: FeatureRequest) -> FeatureResponse:
+    @contract.post(
+        "/v1/features",
+        response_model=FeatureResponse,
+        tags=["features"],
+        summary="Read features",
+        description=FEATURES_DESCRIPTION,
+        openapi_extra=SEC_EITHER,
+        responses={200: _json_example("Feature vector.", FEATURE_RESPONSE_EXAMPLE)},
+    )
+    def post_features(
+        body: Annotated[FeatureRequest, Body(openapi_examples=FEATURE_EXAMPLES)],
+    ) -> FeatureResponse:
         raise RuntimeError(body.card_token)
 
     @contract.get(
         "/v1/alerts",
         response_model=AlertListOut,
-        responses={422: {"description": "Invalid cursor or query"}},
+        tags=["alerts"],
+        summary="List alerts",
+        description=LIST_ALERTS_DESCRIPTION,
+        openapi_extra=SEC_SESSION,
+        responses={200: _json_example("One page of alerts.", ALERT_LIST_EXAMPLE)},
     )
     def list_alerts(
         status: Annotated[list[Status] | None, Query()] = None,
@@ -690,7 +901,11 @@ def _contract_app() -> FastAPI:
     @contract.get(
         "/v1/alerts/{alert_id}",
         response_model=AlertDetailOut,
-        responses={404: {"description": "Unknown alert"}},
+        tags=["alerts"],
+        summary="Get alert",
+        description=GET_ALERT_DESCRIPTION,
+        openapi_extra=SEC_SESSION,
+        responses={200: _json_example("Alert, rule, and audit history.", ALERT_DETAIL_EXAMPLE)},
     )
     def get_alert(alert_id: UUID) -> AlertDetailOut:
         raise RuntimeError(alert_id)
@@ -698,40 +913,51 @@ def _contract_app() -> FastAPI:
     @contract.patch(
         "/v1/alerts/{alert_id}",
         response_model=AlertOut,
-        responses={
-            403: {"description": "Viewer cannot change status"},
-            404: {"description": "Unknown alert"},
-            409: {"description": "Invalid transition"},
-            422: {"description": "Missing or invalid note / headers"},
-        },
+        tags=["alerts"],
+        summary="Update alert status",
+        description=PATCH_DESCRIPTION,
+        openapi_extra=SEC_SESSION,
+        responses={200: _json_example("Alert after the transition.", ALERT_ACKNOWLEDGED)},
     )
-    def patch_alert(alert_id: UUID, body: AlertUpdate) -> AlertOut:
+    def patch_alert(
+        alert_id: UUID,
+        body: Annotated[AlertUpdate, Body(openapi_examples=PATCH_EXAMPLES)],
+    ) -> AlertOut:
         raise RuntimeError(alert_id, body.status)
 
-    @contract.get("/v1/rules", response_model=list[RuleOut])
+    @contract.get(
+        "/v1/rules",
+        response_model=list[RuleOut],
+        tags=["rules"],
+        summary="List rules",
+        description=RULES_DESCRIPTION,
+        openapi_extra=SEC_SESSION,
+        responses={200: _json_example("Seeded rules.", [RULE_CARD, RULE_MERCHANT])},
+    )
     def list_rules() -> list[RuleOut]:
         raise RuntimeError("openapi only")
 
-    @contract.get("/v1/catalog", response_model=list[CatalogEntry])
+    @contract.get(
+        "/v1/catalog",
+        response_model=list[CatalogEntry],
+        tags=["catalog"],
+        summary="Feature catalog",
+        description=CATALOG_DESCRIPTION,
+        openapi_extra=SEC_SESSION,
+        responses={200: _json_example("Registry rows.", CATALOG_EXAMPLE)},
+    )
     def get_catalog() -> list[CatalogEntry]:
         raise RuntimeError("openapi only")
 
     return contract
 
 
-def _error_response(description: str) -> dict[str, Any]:
-    return {
-        "description": description,
-        "content": {
-            "application/json": {
-                "schema": {"$ref": "#/components/schemas/ProblemDetails"},
-            },
-        },
-    }
-
-
 def _apply_contract(schema: dict[str, Any]) -> None:
-    contract = get_openapi(title="gateway", version="0.1.0", routes=_contract_app().routes)
+    contract = get_openapi(
+        title="Feature Store Gateway",
+        version="1.0.0",
+        routes=_contract_app().routes,
+    )
     paths = schema.setdefault("paths", {})
     contract_paths = contract.get("paths", {})
     for path in _BUSINESS_PATHS:
@@ -762,43 +988,9 @@ def _apply_contract(schema: dict[str, Any]) -> None:
             "description": "Operator JWT session cookie (ADR-020).",
         },
     }
-    session_only = {"/v1/auth/logout", "/v1/auth/me"}
-    either = {
-        "/v1/features",
-        "/v1/alerts",
-        "/v1/alerts/{alert_id}",
-        "/v1/rules",
-        "/v1/catalog",
-    }
-    for path in _BUSINESS_PATHS:
-        path_item = paths.get(path)
-        if not isinstance(path_item, dict):
-            continue
-        for method, operation in path_item.items():
-            if method not in _METHODS or not isinstance(operation, dict):
-                continue
-            if path == "/v1/auth/login":
-                operation.pop("security", None)
-            elif path in session_only:
-                operation["security"] = [{"SessionCookie": []}]
-            elif path in either:
-                operation["security"] = [{"ApiKey": []}, {"SessionCookie": []}]
-            responses = operation.setdefault("responses", {})
-            for code, description in _GATEWAY_ERRORS.items():
-                responses[code] = _error_response(description)
-            parameters = operation.setdefault("parameters", [])
-            if not any(
-                isinstance(item, dict) and item.get("name") == "X-Request-ID" for item in parameters
-            ):
-                parameters.append(
-                    {
-                        "name": "X-Request-ID",
-                        "in": "header",
-                        "required": False,
-                        "schema": {"type": "string"},
-                        "description": "Correlation id. Generated when the header is empty.",
-                    }
-                )
+    finalize_documented_openapi(schema, tags=OPENAPI_TAGS, errors=ERROR_CODES)
+    ensure_explicit_security(schema)
+    apply_response_examples(schema)
 
 
 def _bind_openapi(app: FastAPI) -> None:
@@ -806,7 +998,15 @@ def _bind_openapi(app: FastAPI) -> None:
         cached = app.openapi_schema
         if isinstance(cached, dict):
             return cached
-        schema = get_openapi(title=app.title, version=app.version, routes=app.routes)
+        schema = get_openapi(
+            title=app.title,
+            version=app.version,
+            description=app.description,
+            routes=app.routes,
+            tags=app.openapi_tags,
+            servers=app.servers,
+            license_info=app.license_info,
+        )
         _apply_contract(schema)
         app.openapi_schema = schema
         return schema
@@ -873,7 +1073,15 @@ def create_app(
 ) -> FastAPI:
     """Build the gateway. Importing this module does not open connections."""
     resolved = settings if settings is not None else Settings.from_env()
-    app = FastAPI(title="gateway", version="0.1.0", lifespan=_lifespan)
+    app = FastAPI(
+        title="Feature Store Gateway",
+        version="1.0.0",
+        description=API_DESCRIPTION,
+        servers=[{"url": "http://localhost:8080"}],
+        license_info={"name": "MIT", "identifier": "MIT"},
+        openapi_tags=OPENAPI_TAGS,
+        lifespan=_lifespan,
+    )
     app.state.settings = resolved
     app.state.metrics = METRICS if metrics is None else metrics
     app.state.system_hub = SystemHub()

@@ -4,7 +4,7 @@ PROFILES := --profile baseline --profile sim
 KAFKA_BOOTSTRAP := localhost:9092
 KAFKA_TOPICS := /opt/kafka/bin/kafka-topics.sh
 
-.PHONY: up down logs ps topics secret lint typecheck test test-int test-e2e clean openapi pan-scan audit obs-up baseline-up backfill demo exp-k1k2 exp-k1k2-short exp-ladder
+.PHONY: up down logs ps topics secret lint typecheck test test-int test-e2e clean openapi docs-lint docs-build docs-mock pan-scan audit obs-up baseline-up backfill demo exp-k1k2 exp-k1k2-short exp-ladder
 
 up:
 	$(COMPOSE) up -d --wait kafka postgres redis clickhouse
@@ -95,6 +95,16 @@ openapi:
 	uv run python -c "from features.api import export_openapi; export_openapi('docs/openapi/features.json')"
 	uv run python -c "from detection.api import export_openapi; export_openapi('docs/openapi/detection.json')"
 	uv run python -c "from gateway.api import export_openapi; export_openapi('docs/openapi/gateway.json')"
+
+docs-lint:
+	npx --yes @redocly/cli lint docs/openapi/*.json
+	npx --yes @stoplight/spectral-cli lint docs/asyncapi/*.yaml
+
+docs-build:
+	npx --yes @redocly/cli build-docs docs/openapi/gateway.json -o docs/site/index.html
+
+docs-mock:
+	npx --yes @stoplight/prism-cli mock docs/openapi/gateway.json -p 4010
 
 pan-scan:
 	PYTHONPATH=tools uv run python -m pan_scan

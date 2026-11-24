@@ -156,6 +156,9 @@ activemq-data/
 secrets/
 node_modules/
 
+# Static Redoc page (make docs-build). CI publishes it as an artifact.
+docs/site/
+
 # k6 load experiment artifacts (T3.5)
 experiments/load/tokens.json
 experiments/load/runs/

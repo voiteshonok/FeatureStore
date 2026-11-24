@@ -2,6 +2,15 @@
 
 Breaking and notable contract changes for the public `/v1/` surface (gateway).
 
+## Deprecation policy
+
+The current contract is tagged `v1` (URL prefix `/v1/`).
+
+Additive changes stay on `v1`: a new optional field, a new endpoint, or a new
+filter. They are listed in this file. A breaking change adds `/v2/` and keeps
+`v1` for one release. During that release, responses on `v1` include a
+`Deprecation` header.
+
 ## 2026-11-22 — Feature lookup by one entity
 
 `POST /v1/features` accepts `card_token`, `merchant_id`, or both. At least one

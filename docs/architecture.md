@@ -125,6 +125,7 @@ flowchart TB
     subgraph host [Docker host — infra/docker-compose.yml]
         subgraph net [compose network]
             GW[gateway :8080→8080]
+            DASH[dashboard :8081→8080]
             ING[ingestion :8000→8000]
             FW[features-worker]
             FO[features-offline]
@@ -137,7 +138,8 @@ flowchart TB
             CH[(clickhouse :8123)]
         end
         SEC[/compose secret: hmac_key/] -.-> ING
-        ENV[/.env: DB passwords/] -.-> PG & ING & FEAT & DET & GW
+        ENV[/.env: DB passwords/] -.-> PG & ING & FO & FA & DET & GW
+        DASH -->|"/api"| GW
         ING -.->|"scrape :9000"| PROM
         FW -.->|"scrape :9000"| PROM
         FO -.->|"scrape :9000"| PROM

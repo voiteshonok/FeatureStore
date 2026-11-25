@@ -56,10 +56,10 @@ Service boundaries, contracts and the full deployment diagram: see
 | infra (compose, Kafka, Postgres, Redis, ClickHouse) | done |
 | features | done — worker (Redis windows, watermarks, snapshots), offline-writer (ClickHouse batches, ADR-018), api (serving, ADR-013 freshness); two images, three processes (ADR-007) |
 | detection | done — rule evaluation over snapshots, alert lifecycle API, audit via DB trigger |
-| gateway | done — routing, API-key auth, rate limiting, timeouts/retries, request ids |
+| gateway | done — routing, dual auth (X-API-Key for scoring, fs_session for operators, ADR-020), rate limiting, timeouts/retries, request ids |
 | PostgreSQL OLTP (schemas, roles, seed) | done — infra/postgres, docs/db |
-| e2e | stage 2 and stage 3 flows (tests/e2e) |
-| dashboard | scaffold — SPA on :8081 (T8.1); login and live panels follow |
+| e2e | done — stage 2 ingest, stage 3 features and backfill, stage 4 offline outage, stage 7 system stream, OpenAPI contract (tests/e2e) |
+| dashboard | done — operator SPA on :8081: login, live overview, alerts, feature lookup |
 
 ## Quickstart
 
@@ -69,7 +69,7 @@ Requirements: Docker + Docker Compose, `uv`, Python 3.12.
 make secret        # generate local HMAC and JWT secrets (never committed)
 make up            # kafka, postgres, redis, clickhouse, topics, ingestion, gateway, dashboard
 make ps            # check health
-# operator UI (stubs until T8.2+): http://localhost:8081 — /api/ proxied to gateway
+# operator UI: http://localhost:8081 — /api/ proxied to gateway
 make baseline-up   # SQL measurement stand on :8003 (ADR-015); not a service, not started by make up
 # send traffic:
 docker compose -f infra/docker-compose.yml --profile sim up simulator
@@ -143,6 +143,7 @@ Live streams are specified in [docs/asyncapi/](docs/asyncapi/). `make docs-lint`
 
 ```
 services/        one directory per microservice (own pyproject, Dockerfile, tests)
+dashboard/       operator SPA (nginx on :8081)
 libs/schemas/    versioned message and API contracts (no business logic)
 simulator/       load generator
 infra/           docker-compose, Postgres/ClickHouse init scripts

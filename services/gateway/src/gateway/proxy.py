@@ -1,9 +1,11 @@
 """Outbound timeouts and retries.
 
 GET is tried three times (the call, then two retries) with 0.1 s and 0.4 s
-between attempts. POST and PATCH are a single attempt. A transport failure or
-timeout becomes 503. Any HTTP response, including 4xx and 5xx, is returned
-unchanged.
+between attempts. POST /v1/features retries once after 0.05 s, and only when
+the first attempt raises ConnectError: the request never left the gateway.
+Other POST and PATCH calls are a single attempt. Read timeouts are not
+retried on that POST. A timeout becomes 504; any other transport failure
+becomes 503. Any HTTP response, including 4xx and 5xx, is returned unchanged.
 """
 
 import asyncio
@@ -21,6 +23,7 @@ TIMEOUT = httpx.Timeout(connect=0.5, read=2.0, write=2.0, pool=0.5)
 # SSE (ADR-021): keep the connect bound, never time out the open stream.
 STREAM_TIMEOUT = httpx.Timeout(connect=0.5, read=None, write=2.0, pool=0.5)
 _GET_BACKOFF_S = (0.1, 0.4)
+_CONNECT_RETRY_S = 0.05
 _DROP_HEADERS = frozenset(
     {
         "connection",
@@ -103,20 +106,27 @@ async def forward(
     *,
     base_url: str,
     service: str,
+    retry_on_connect: bool = False,
 ) -> Response:
     """Send the request upstream; timeouts → 504, other transport errors → 503."""
     from gateway.errors import problem_response
 
     request_id = _request_id(request)
-    idempotent = request.method == "GET"
-    attempts = 1 + len(_GET_BACKOFF_S) if idempotent else 1
+    get_retries = request.method == "GET"
+    if get_retries:
+        attempts = 1 + len(_GET_BACKOFF_S)
+    elif retry_on_connect:
+        attempts = 2
+    else:
+        attempts = 1
     body = await request.body()
     url = _target(base_url, request)
     headers = _forward_headers(request, request_id)
     last_error: httpx.TransportError | None = None
     for attempt in range(attempts):
         if attempt:
-            await pause(_GET_BACKOFF_S[attempt - 1])
+            delay = _GET_BACKOFF_S[attempt - 1] if get_retries else _CONNECT_RETRY_S
+            await pause(delay)
         try:
             upstream = await client.request(
                 request.method,
@@ -127,6 +137,8 @@ async def forward(
         except httpx.TransportError as exc:
             last_error = exc
             _count_upstream_error(request, service, exc)
+            if not get_retries and not isinstance(exc, httpx.ConnectError):
+                break
         else:
             return passthrough(upstream, request_id)
     _log_failure(service, request, request_id, last_error)

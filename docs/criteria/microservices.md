@@ -61,7 +61,7 @@ service.
 | 7 | Loose coupling; services work independently | ✅ | Kafka backbone; no sync calls between business services; windows rebuild from replay |
 | 8 | No shared database (or justified) | ✅ | Schema-per-service + per-service credentials (infra/postgres, docs/db/data-dictionary.md) |
 | 9 | Sync: REST with versioned contracts | ✅ | `/v1/` on every API; gateway proxies only |
-| 10 | Timeouts and retry policies on all sync calls | ✅ | services/gateway proxy: connect/read timeouts, bounded retries for idempotent GET only |
+| 10 | Timeouts and retry policies on all sync calls | ✅ | services/gateway proxy: connect/read timeouts, bounded retries for idempotent GET, one connect retry for `POST /v1/features` |
 | 11 | Handling of unavailable dependencies | ✅ | ingestion: 503+Retry-After on Kafka outage (ADR-006, tested); gateway: upstream down → 503, no hang; worker pauses without committing offsets on Redis outage |
 | 12 | Rate limiting at the entry point | ✅ | gateway: slowapi per API key (`GATEWAY_RATE_LIMIT`), 429 + Retry-After |
 | 13 | Own codebase per service (monorepo ok) | ✅ | services/* as uv workspace packages |
@@ -84,6 +84,6 @@ consumers and schema-level dedup instead, ADR-003) · not a folder-split monolit
 
 | Direction | Implemented |
 | --- | --- |
-| Asynchronous communication | Event-driven backbone (`transactions.raw`, `features.updates`); idempotent producer (ingestion); duplicate-safe apply via per-partition watermarks in one atomic Lua script (ADR-003); recovery by replay from committed offsets |
+| Asynchronous communication | Event-driven backbone (`transactions.raw`, `features.updates`); idempotent producer (ingestion); duplicate-safe apply via per-partition watermarks in one atomic Lua script (ADR-003); recovery seeks to the Redis watermark, and the committed offset stays for lag |
 | Resilience patterns | Timeout management + bounded retries (gateway); graceful degradation with explicit feature statuses (ADR-013); 503+Retry-After backpressure (ADR-006); freshness heartbeat separating "no traffic" from "writer down" |
 | Observability (partial) | Correlation ids end-to-end, structured JSON logs, health/ready with per-dependency detail; Prometheus metrics on METRICS_PORT (ADR-014) |

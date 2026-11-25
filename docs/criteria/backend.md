@@ -70,7 +70,7 @@ flowchart LR
   subgraph GW["gateway"]
     direction TB
     GA["auth/: jwt, cookies, password, access (RBAC, CSRF)"]
-    GP["proxy (timeouts, retries for GET, SSE passthrough)"]
+    GP["proxy (timeouts, GET retries, POST /v1/features connect retry, SSE passthrough)"]
     GS["system/: collector, hub, SSE"]
   end
   GW -->|/v1/features| FA["features-api"]

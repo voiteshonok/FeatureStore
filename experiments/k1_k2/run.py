@@ -33,6 +33,17 @@ _SAMPLE_TOKENS = _ROOT / "experiments" / "load" / "sample_tokens.py"
 _TARGETS = ("direct", "gateway", "baseline")
 
 
+def _redis_url() -> str:
+    """Host Redis URL. ``REDIS_URL`` wins; else ``REDIS_PASSWORD`` on localhost."""
+    explicit = os.environ.get("REDIS_URL")
+    if explicit:
+        return explicit
+    password = os.environ.get("REDIS_PASSWORD")
+    if password:
+        return f"redis://:{password}@localhost:6379/0"
+    return "redis://localhost:6379/0"
+
+
 def main(argv: list[str] | None = None) -> int:
     _ = argv
     mode = os.environ.get("MODE", "full")
@@ -119,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
     wait_for_zero_lag(prom_url, timeout_s=lag_timeout)
 
     print("== redis memory ==", flush=True)
-    redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+    redis_url = _redis_url()
     redis_payload = capture_redis_memory(url=redis_url)
     _write_json(out_dir / "redis-memory.json", redis_payload)
 

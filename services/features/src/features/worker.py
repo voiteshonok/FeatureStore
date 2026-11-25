@@ -5,12 +5,12 @@ import importlib.resources
 import json
 import logging
 import signal
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Collection
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal, cast
 
-from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
+from aiokafka import AIOKafkaConsumer, AIOKafkaProducer, ConsumerRebalanceListener
 from aiokafka.structs import ConsumerRecord, TopicPartition
 from pydantic import ValidationError
 from redis.asyncio import Redis
@@ -48,6 +48,9 @@ _LOG_FIELDS = (
     "dup",
     "dup_event",
     "skipped",
+    "committed",
+    "watermark",
+    "seek_to",
 )
 Sleep = Callable[[float], Awaitable[None]]
 Outcome = Literal["applied", "dup", "dup_event"]
@@ -283,7 +286,6 @@ class OnlineWriter:
             socket_connect_timeout=5.0,
         )
         consumer = AIOKafkaConsumer(
-            settings.raw_topic,
             bootstrap_servers=settings.kafka_bootstrap,
             group_id=settings.group_id,
             enable_auto_commit=False,
@@ -298,6 +300,8 @@ class OnlineWriter:
             client_id="features-online-writer",
         )
         writer = cls(settings, redis, consumer, producer)
+        # Subscribe before start so the first assignment seeks from the watermark.
+        consumer.subscribe([settings.raw_topic], listener=WatermarkSeek(writer))
         await writer.start()
         return writer
 
@@ -405,6 +409,35 @@ class OnlineWriter:
             await self._commit(record, str(event.event_id))
             return
 
+    async def seek_from_watermarks(self, assigned: Collection[TopicPartition]) -> None:
+        """Seek each owned partition to one past the Redis watermark.
+
+        A missing watermark leaves the committed position in place. Reads are
+        retried before any seek, so a Redis blip cannot double-count the rewind.
+        """
+        partitions = [tp for tp in assigned if tp.topic == self.settings.raw_topic]
+        if not partitions:
+            return
+
+        async def once() -> None:
+            loaded: list[tuple[TopicPartition, int | None, int | None]] = []
+            for tp in partitions:
+                committed = await self.consumer.committed(tp)
+                watermark = await read_offset(self.redis, tp.partition)
+                loaded.append((tp, committed, watermark))
+            for tp, committed, watermark in loaded:
+                seek_to = committed
+                if watermark is not None:
+                    seek_to = watermark + 1
+                    self.consumer.seek(tp, seek_to)
+                    if committed is not None:
+                        rewind = committed - seek_to
+                        if rewind > 0:
+                            self.metrics.rewind.inc(rewind)
+                self._log_assignment(tp.partition, committed, watermark, seek_to)
+
+        await self._retry(once, "watermark seek failed")
+
     async def heartbeat(self) -> None:
         """Refresh ``as_of_ms`` on caught-up partitions. Writer state only."""
         while True:
@@ -506,6 +539,23 @@ class OnlineWriter:
                 await self.sleep(backoff)
                 backoff = min(backoff * 2, self.settings.redis_backoff_max_s)
 
+    def _log_assignment(
+        self,
+        partition: int,
+        committed: int | None,
+        watermark: int | None,
+        seek_to: int | None,
+    ) -> None:
+        logging.getLogger("features").info(
+            "partition assigned",
+            extra={
+                "partition": partition,
+                "committed": committed,
+                "watermark": watermark,
+                "seek_to": seek_to,
+            },
+        )
+
     def _count(self, outcome: Outcome) -> None:
         self.metrics.events.labels(outcome=outcome).inc()
         if outcome == "applied":
@@ -565,6 +615,20 @@ async def run(settings: Settings) -> None:
     finally:
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.remove_signal_handler(sig)
+
+
+class WatermarkSeek(ConsumerRebalanceListener):  # type: ignore[misc]
+    """Restore the read position from ``wm:{partition}.offset`` on assign."""
+
+    def __init__(self, writer: OnlineWriter) -> None:
+        self._writer = writer
+
+    async def on_partitions_revoked(self, revoked: object) -> None:
+        """Offsets are committed per record. Nothing to flush on revoke."""
+
+    async def on_partitions_assigned(self, assigned: set[TopicPartition]) -> None:
+        """Seek before the first fetch. Redis errors stay inside the retry loop."""
+        await self._writer.seek_from_watermarks(assigned)
 
 
 def main() -> None:

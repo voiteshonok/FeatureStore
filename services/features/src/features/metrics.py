@@ -92,6 +92,11 @@ class WorkerMetrics:
             "Apply attempts retried after a retryable failure.",
             registry=registry,
         )
+        self.rewind = Counter(
+            "features_worker_rewind_events_total",
+            "Events replayed because the Redis watermark was behind the committed offset.",
+            registry=registry,
+        )
 
 
 def api_metrics(registry: CollectorRegistry | None = None) -> ApiMetrics:

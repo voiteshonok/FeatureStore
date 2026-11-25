@@ -90,7 +90,8 @@ ADR-006).
 
 Only two sync hops exist — `gateway → features` and `gateway → detection` — so no
 call chain exceeds 2 services. Every sync call carries: connect/read timeouts,
-bounded retries with exponential backoff (idempotent GETs only), and a mapped
+bounded retries with exponential backoff (idempotent GETs, plus one connect
+retry for `POST /v1/features`), and a mapped
 `503`/`504` when the dependency is down (graceful degradation: the dashboard shows
 "features unavailable", partial results where possible). APIs are versioned under
 `/v1/`; OpenAPI specs are exported to [openapi/](openapi/). Contract changes are
@@ -125,6 +126,7 @@ flowchart TB
     subgraph host [Docker host — infra/docker-compose.yml]
         subgraph net [compose network]
             GW[gateway :8080→8080]
+            DASH[dashboard :8081→8080]
             ING[ingestion :8000→8000]
             FW[features-worker]
             FO[features-offline]
@@ -137,7 +139,8 @@ flowchart TB
             CH[(clickhouse :8123)]
         end
         SEC[/compose secret: hmac_key/] -.-> ING
-        ENV[/.env: DB passwords/] -.-> PG & ING & FEAT & DET & GW
+        ENV[/.env: DB passwords/] -.-> PG & ING & FO & FA & DET & GW
+        DASH -->|"/api"| GW
         ING -.->|"scrape :9000"| PROM
         FW -.->|"scrape :9000"| PROM
         FO -.->|"scrape :9000"| PROM
@@ -147,6 +150,9 @@ flowchart TB
     end
 ```
 
+- From the host, only gateway port 8080 and dashboard port 8081 listen on every
+  interface. Every other published port is bound to `127.0.0.1`. Ingestion port
+  8000 stays published for the local write path (ADR-008).
 - One image per service, built from its own Dockerfile (multi-stage `uv` build,
   non-root `USER`, pinned base images); compose wires healthchecks
   (`condition: service_healthy`) so services start only after their dependencies.

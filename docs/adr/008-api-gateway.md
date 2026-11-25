@@ -50,10 +50,13 @@ health only (ADR-007, ADR-012), so the gateway runs one `SELECT` as `svc_gateway
   enforced in process by slowapi. One gateway replica is the deployed shape; another
   replica would have its own bucket.
 - Upstream calls use a 0.5 s connect timeout and a 2 s read timeout. GET is tried
-  three times, with 0.1 s then 0.4 s between attempts. POST and PATCH are not retried.
-  A connection failure or timeout becomes 503. An upstream HTTP response, including
-  4xx, is returned unchanged. **Exception (ADR-021):** SSE routes use a streaming
-  proxy with no read timeout and no retries.
+  three times, with 0.1 s then 0.4 s between attempts. `POST /v1/features` is an
+  idempotent read: one extra attempt after 0.05 s, and only on `ConnectError`
+  (the request never left the gateway). Other POST and PATCH calls are not
+  retried. A timeout becomes 504; any other transport failure becomes 503. An
+  upstream HTTP response, including 4xx, is returned unchanged. **Exception
+  (ADR-021):** SSE routes use a streaming proxy with no read timeout and no
+  retries.
 - `svc_gateway` has `SELECT` on the feature registry tables and nothing else. A failed
   catalog read is 503.
 - The extra hop is on the feature read path and counts toward K1.

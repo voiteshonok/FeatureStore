@@ -3,7 +3,7 @@ services:
     image: apache/kafka:3.9.0
     hostname: kafka
     ports:
-      - "29092:29092"
+      - "127.0.0.1:29092:29092"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
@@ -40,13 +40,26 @@ services:
 
   redis:
     image: redis:8
-    command: ["redis-server", "--appendonly", "yes"]
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--requirepass",
+        "${REDIS_PASSWORD:?run make secret}",
+      ]
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?run make secret}
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test:
+        [
+          "CMD-SHELL",
+          "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping",
+        ]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -63,11 +76,11 @@ services:
       - "127.0.0.1:9000:9000"
     environment:
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-featurestore}
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-featurestore}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?run make secret}
       CLICKHOUSE_DB: ${CLICKHOUSE_DB:-featurestore}
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
-      SVC_OFFLINE_PASSWORD: ${SVC_OFFLINE_PASSWORD:-svc_offline_dev}
-      SVC_FEATURES_READ_PASSWORD: ${SVC_FEATURES_READ_PASSWORD:-svc_features_read_dev}
+      SVC_OFFLINE_PASSWORD: ${SVC_OFFLINE_PASSWORD:?run make secret}
+      SVC_FEATURES_READ_PASSWORD: ${SVC_FEATURES_READ_PASSWORD:?run make secret}
     volumes:
       - clickhouse-data:/var/lib/clickhouse
       - ./clickhouse:/docker-entrypoint-initdb.d:ro
@@ -93,16 +106,16 @@ services:
   postgres:
     image: postgres:17
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-featurestore}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-featurestore}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run make secret}
       POSTGRES_DB: ${POSTGRES_DB:-featurestore}
-      SVC_INGESTION_PASSWORD: ${SVC_INGESTION_PASSWORD:-svc_ingestion_dev}
-      SVC_FEATURES_PASSWORD: ${SVC_FEATURES_PASSWORD:-svc_features_dev}
-      SVC_DETECTION_PASSWORD: ${SVC_DETECTION_PASSWORD:-svc_detection_dev}
-      SVC_GATEWAY_PASSWORD: ${SVC_GATEWAY_PASSWORD:-svc_gateway_dev}
-      SVC_BASELINE_PASSWORD: ${SVC_BASELINE_PASSWORD:-svc_baseline_dev}
+      SVC_INGESTION_PASSWORD: ${SVC_INGESTION_PASSWORD:?run make secret}
+      SVC_FEATURES_PASSWORD: ${SVC_FEATURES_PASSWORD:?run make secret}
+      SVC_DETECTION_PASSWORD: ${SVC_DETECTION_PASSWORD:?run make secret}
+      SVC_GATEWAY_PASSWORD: ${SVC_GATEWAY_PASSWORD:?run make secret}
+      SVC_BASELINE_PASSWORD: ${SVC_BASELINE_PASSWORD:?run make secret}
     # ADR-015: a day of baseline.transactions is about 7 GB. 1g and 3g measure disk.
     command:
       [
@@ -136,10 +149,10 @@ services:
       context: ..
       dockerfile: services/ingestion/Dockerfile
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       KAFKA_BOOTSTRAP: kafka:9092
-      DATABASE_URL: postgresql://svc_ingestion:${SVC_INGESTION_PASSWORD:-svc_ingestion_dev}@postgres:5432/${POSTGRES_DB:-featurestore}
+      DATABASE_URL: postgresql://svc_ingestion:${SVC_INGESTION_PASSWORD:?run make secret}@postgres:5432/${POSTGRES_DB:-featurestore}
       METRICS_PORT: "9000"
     secrets:
       - hmac_key
@@ -171,7 +184,7 @@ services:
       dockerfile: services/features/Dockerfile
     environment:
       KAFKA_BOOTSTRAP: kafka:9092
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:?run make secret}@redis:6379/0
       METRICS_PORT: "9000"
     depends_on:
       kafka:
@@ -204,7 +217,7 @@ services:
       KAFKA_BOOTSTRAP: kafka:9092
       CLICKHOUSE_URL: http://clickhouse:8123
       CLICKHOUSE_USER: svc_offline
-      CLICKHOUSE_PASSWORD: ${SVC_OFFLINE_PASSWORD:-svc_offline_dev}
+      CLICKHOUSE_PASSWORD: ${SVC_OFFLINE_PASSWORD:?run make secret}
       CLICKHOUSE_DB: ${CLICKHOUSE_DB:-featurestore}
       OFFLINE_BATCH_ROWS: ${OFFLINE_BATCH_ROWS:-5000}
       OFFLINE_FLUSH_INTERVAL_S: ${OFFLINE_FLUSH_INTERVAL_S:-1}
@@ -238,11 +251,11 @@ services:
       context: ..
       dockerfile: services/features/Dockerfile.api
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     environment:
       KAFKA_BOOTSTRAP: kafka:9092
-      REDIS_URL: redis://redis:6379/0
-      DATABASE_URL: postgresql://svc_features:${SVC_FEATURES_PASSWORD:-svc_features_dev}@postgres:5432/${POSTGRES_DB:-featurestore}
+      REDIS_URL: redis://:${REDIS_PASSWORD:?run make secret}@redis:6379/0
+      DATABASE_URL: postgresql://svc_features:${SVC_FEATURES_PASSWORD:?run make secret}@postgres:5432/${POSTGRES_DB:-featurestore}
       N_PARTITIONS: "4"
       METRICS_PORT: "9000"
       FEATURES_API_WORKERS: ${FEATURES_API_WORKERS:-4}  # 8 did not improve 200 RPS p99
@@ -275,10 +288,10 @@ services:
       context: ..
       dockerfile: services/detection/Dockerfile
     ports:
-      - "8002:8002"
+      - "127.0.0.1:8002:8002"
     environment:
       KAFKA_BOOTSTRAP: kafka:9092
-      DATABASE_URL: postgresql://svc_detection:${SVC_DETECTION_PASSWORD:-svc_detection_dev}@postgres:5432/${POSTGRES_DB:-featurestore}
+      DATABASE_URL: postgresql://svc_detection:${SVC_DETECTION_PASSWORD:?run make secret}@postgres:5432/${POSTGRES_DB:-featurestore}
       METRICS_PORT: "9000"
     depends_on:
       kafka:
@@ -317,7 +330,7 @@ services:
       DETECTION_URL: http://detection:8002
       INGESTION_URL: http://ingestion:8000
       PROMETHEUS_URL: http://prometheus:9090
-      DATABASE_URL: postgresql://svc_gateway:${SVC_GATEWAY_PASSWORD:-svc_gateway_dev}@postgres:5432/${POSTGRES_DB:-featurestore}
+      DATABASE_URL: postgresql://svc_gateway:${SVC_GATEWAY_PASSWORD:?run make secret}@postgres:5432/${POSTGRES_DB:-featurestore}
       METRICS_PORT: "9000"
     secrets:
       - jwt_secret
@@ -380,7 +393,7 @@ services:
       dockerfile: experiments/baseline/Dockerfile
     environment:
       KAFKA_BOOTSTRAP: kafka:9092
-      DATABASE_URL: postgresql://svc_baseline:${SVC_BASELINE_PASSWORD:-svc_baseline_dev}@postgres:5432/${POSTGRES_DB:-featurestore}
+      DATABASE_URL: postgresql://svc_baseline:${SVC_BASELINE_PASSWORD:?run make secret}@postgres:5432/${POSTGRES_DB:-featurestore}
       METRICS_PORT: "9000"
     depends_on:
       kafka:
@@ -410,10 +423,10 @@ services:
       context: ..
       dockerfile: experiments/baseline/Dockerfile.api
     ports:
-      - "8003:8003"
+      - "127.0.0.1:8003:8003"
     environment:
       KAFKA_BOOTSTRAP: kafka:9092
-      DATABASE_URL: postgresql://svc_baseline:${SVC_BASELINE_PASSWORD:-svc_baseline_dev}@postgres:5432/${POSTGRES_DB:-featurestore}
+      DATABASE_URL: postgresql://svc_baseline:${SVC_BASELINE_PASSWORD:?run make secret}@postgres:5432/${POSTGRES_DB:-featurestore}
       METRICS_PORT: "9000"
       BASELINE_POOL_MIN_SIZE: "4"
       BASELINE_POOL_MAX_SIZE: "16"

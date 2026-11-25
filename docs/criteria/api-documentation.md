@@ -127,7 +127,7 @@ flowchart LR
 | Error taxonomy and recovery | `api-errors.md` |
 | Pagination | ADR-019, tutorial §2 |
 | Rate limits (`100/second` per client, `5/minute` login, `Retry-After`) | `api-errors.md`, tutorial §1 |
-| Idempotency (`event_id` at ingestion, retries only for `GET` at the gateway) | ADR-003, `architecture.md` |
+| Idempotency (`event_id` at ingestion; gateway retries `GET`, and `POST /v1/features` once on connect failure) | ADR-003, ADR-008, `architecture.md` |
 | Feature freshness (`fresh` / `stale` / `fallback` / `default`) | getting-started §5, ADR-013 |
 | Live streams (SSE, reconnect, `reset`) | ADR-021, ADR-022, AsyncAPI |
 | Request flows and sequence diagrams | `architecture.md`, tutorial |

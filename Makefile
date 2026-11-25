@@ -40,10 +40,12 @@ demo: up
 # First K1/K2 + Redis memory pack → experiments/results/<date>-k1-k2/
 # Default warm-up BACKFILL=30s (fast catch-up). Override BACKFILL=3m or 23h as needed.
 exp-k1k2:
+	set -a && . infra/.env && set +a && \
 	PATH="$(HOME)/.local/bin:$(PATH)" PYTHONPATH=experiments/k1_k2 \
 		uv run python experiments/k1_k2/run.py
 
 exp-k1k2-short:
+	set -a && . infra/.env && set +a && \
 	PATH="$(HOME)/.local/bin:$(PATH)" MODE=short PYTHONPATH=experiments/k1_k2 \
 		uv run python experiments/k1_k2/run.py
 
@@ -69,11 +71,26 @@ topics:
 		--create --if-not-exists --topic features.updates --partitions 4 --replication-factor 1 \
 		--config retention.ms=604800000
 
-# ADR-9 / ADR-020: HMAC and JWT secrets. Do not overwrite existing files.
+# ADR-009 / ADR-020: HMAC and JWT secrets, plus infra/.env passwords.
+# Do not overwrite existing files.
 secret:
 	mkdir -p secrets
 	test -f secrets/hmac_key || openssl rand -hex 32 > secrets/hmac_key
 	test -f secrets/jwt_secret || openssl rand -hex 32 > secrets/jwt_secret
+	if [ ! -f infra/.env ]; then \
+		cp infra/.env.example infra/.env; \
+		for key in REDIS_PASSWORD CLICKHOUSE_PASSWORD POSTGRES_PASSWORD \
+			SVC_INGESTION_PASSWORD SVC_FEATURES_PASSWORD SVC_DETECTION_PASSWORD \
+			SVC_GATEWAY_PASSWORD SVC_BASELINE_PASSWORD SVC_OFFLINE_PASSWORD \
+			SVC_FEATURES_READ_PASSWORD; do \
+			val=$$(openssl rand -hex 24); \
+			if grep -q "^$$key=" infra/.env; then \
+				sed -i "s|^$$key=.*|$$key=$$val|" infra/.env; \
+			else \
+				echo "$$key=$$val" >> infra/.env; \
+			fi; \
+		done; \
+	fi
 
 lint:
 	uv run ruff check .
@@ -107,6 +124,9 @@ docs-mock:
 	npx --yes @stoplight/prism-cli mock docs/openapi/gateway.json -p 4010
 
 pan-scan:
+	set -a && . infra/.env && set +a && \
+	CLICKHOUSE_USER=svc_offline \
+	CLICKHOUSE_PASSWORD="$$SVC_OFFLINE_PASSWORD" \
 	PYTHONPATH=tools uv run python -m pan_scan
 
 audit:

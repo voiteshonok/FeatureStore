@@ -17,14 +17,22 @@ in about ten minutes. Everything runs locally in Docker.
 ## 2. Start the stack
 
 ```bash
-make secret   # local HMAC and JWT secrets in infra/secrets/ (not committed)
+make secret   # HMAC and JWT secrets, and infra/.env if it is missing (never committed)
 make up       # brokers, databases, services, gateway, dashboard
 make ps       # wait until every service is healthy
 ```
 
+`make secret` copies `infra/.env.example` to `infra/.env` only when that file
+is absent, then replaces the database and Redis passwords with random values.
+An existing `.env` is left as it is. If it has no `REDIS_PASSWORD`, add the key
+yourself: Compose stops with `run make secret` rather than filling the file in.
+Postgres and ClickHouse volumes keep the passwords from the first init. A newly
+generated `.env` does not match an old volume; `make clean` starts over.
+
 The public entry point is the **gateway** on `http://localhost:8080`. The
 dashboard on `http://localhost:8081` proxies `/api/*` to the same gateway.
-Other ports are internal and are closed in production.
+Other published ports bind to `127.0.0.1`, so a script on this machine can
+still reach ingestion, the feature API, Kafka, Postgres, and Redis.
 
 Check that the gateway is ready:
 

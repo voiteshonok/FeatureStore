@@ -353,13 +353,29 @@ def _cell(value: object) -> str:
     return "" if value is None else str(value)
 
 
+def redis_url_from_env() -> str:
+    """Redis URL for a host-side client.
+
+    ``REDIS_URL`` wins. Otherwise a set ``REDIS_PASSWORD`` is applied to
+    localhost:6379. With neither, the URL has no password so test containers
+    keep working.
+    """
+    explicit = os.environ.get("REDIS_URL")
+    if explicit:
+        return explicit
+    password = os.environ.get("REDIS_PASSWORD")
+    if password:
+        return f"redis://:{password}@localhost:6379/0"
+    return "redis://localhost:6379/0"
+
+
 class RedisSource(_LiveSource):
     """SCAN Redis keys and apply known-prefix skip rules."""
 
     def __init__(self) -> None:
         self.name = "redis"
         self.enabled = True
-        self._url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+        self._url = redis_url_from_env()
 
     def records(self) -> Iterator[tuple[str, str]]:
         try:

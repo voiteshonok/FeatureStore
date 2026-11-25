@@ -35,7 +35,7 @@ def test_baseline_services_are_profile_only_and_postgres_is_sized() -> None:
         assert services[name]["profiles"] == ["baseline"]
         assert str(services[name]["environment"]["METRICS_PORT"]) == "9000"
     assert "ports" not in services["baseline-writer"]
-    assert "8003:8003" in services["baseline-api"]["ports"]
+    assert services["baseline-api"]["ports"] == ["127.0.0.1:8003:8003"]
     postgres = services["postgres"]
     assert postgres["deploy"]["resources"]["limits"]["memory"] == "8g"
     assert postgres["shm_size"] == "1gb"
@@ -56,3 +56,30 @@ def test_role_is_not_a_member_of_the_product_tiers() -> None:
     for line in roles.splitlines():
         if "GRANT fs_write" in line or "GRANT fs_read" in line:
             assert "svc_baseline" not in line
+
+
+_LOOPBACK_PORTS = {
+    "kafka": ["127.0.0.1:29092:29092"],
+    "redis": ["127.0.0.1:6379:6379"],
+    "postgres": ["127.0.0.1:5432:5432"],
+    "ingestion": ["127.0.0.1:8000:8000"],
+    "features-api": ["127.0.0.1:8001:8001"],
+    "detection": ["127.0.0.1:8002:8002"],
+    "baseline-api": ["127.0.0.1:8003:8003"],
+    "clickhouse": ["127.0.0.1:8123:8123", "127.0.0.1:9000:9000"],
+    "prometheus": ["127.0.0.1:9090:9090"],
+}
+
+
+def test_published_ports_bind_localhost_except_the_edge() -> None:
+    text = (_ROOT / "infra" / "docker-compose.yml").read_text(encoding="utf-8")
+    services = yaml.safe_load(text)["services"]
+    assert services["gateway"]["ports"] == ["8080:8080"]
+    assert services["dashboard"]["ports"] == ["8081:8080"]
+    for name, ports in _LOOPBACK_PORTS.items():
+        assert services[name]["ports"] == ports
+    assert "PASSWORD:-" not in text
+    assert ":-svc_" not in text
+    assert "--requirepass" in services["redis"]["command"]
+    redis_password = str(services["redis"]["environment"]["REDIS_PASSWORD"])
+    assert redis_password == "${REDIS_PASSWORD:?run make secret}"  # noqa: S105

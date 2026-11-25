@@ -6,6 +6,7 @@ from pan_scan.scan import (
     find_pans,
     format_report,
     redis_scan_texts,
+    redis_url_from_env,
     scan_records,
 )
 
@@ -123,6 +124,16 @@ def test_unknown_prefix_scans_entire_zset_and_hash() -> None:
         hash_items={"count": PAN},
     )
     assert scan_records("redis", [("unk-hash", " ".join(hash_texts))])[0].masked == MASKED
+
+
+def test_redis_url_uses_password_from_the_environment(monkeypatch) -> None:
+    monkeypatch.delenv("REDIS_URL", raising=False)
+    monkeypatch.delenv("REDIS_PASSWORD", raising=False)
+    assert redis_url_from_env() == "redis://localhost:6379/0"
+    monkeypatch.setenv("REDIS_PASSWORD", "abc")
+    assert redis_url_from_env() == "redis://:abc@localhost:6379/0"
+    monkeypatch.setenv("REDIS_URL", "redis://:explicit@localhost:6379/1")
+    assert redis_url_from_env() == "redis://:explicit@localhost:6379/1"
 
 
 def test_format_report_shows_scanned_counts_not_findings() -> None:

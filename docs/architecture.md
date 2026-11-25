@@ -149,6 +149,9 @@ flowchart TB
     end
 ```
 
+- From the host, only gateway port 8080 and dashboard port 8081 listen on every
+  interface. Every other published port is bound to `127.0.0.1`. Ingestion port
+  8000 stays published for the local write path (ADR-008).
 - One image per service, built from its own Dockerfile (multi-stage `uv` build,
   non-root `USER`, pinned base images); compose wires healthchecks
   (`condition: service_healthy`) so services start only after their dependencies.

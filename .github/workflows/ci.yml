@@ -79,7 +79,9 @@ jobs:
       - run: npm audit --audit-level=high
       - name: Dashboard image builds
         working-directory: .
-        run: docker compose -f infra/docker-compose.yml build dashboard
+        run: |
+          make secret
+          docker compose --env-file infra/.env -f infra/docker-compose.yml build dashboard
 
   docs:
     runs-on: ubuntu-latest

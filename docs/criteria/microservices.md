@@ -84,6 +84,6 @@ consumers and schema-level dedup instead, ADR-003) · not a folder-split monolit
 
 | Direction | Implemented |
 | --- | --- |
-| Asynchronous communication | Event-driven backbone (`transactions.raw`, `features.updates`); idempotent producer (ingestion); duplicate-safe apply via per-partition watermarks in one atomic Lua script (ADR-003); recovery by replay from committed offsets |
+| Asynchronous communication | Event-driven backbone (`transactions.raw`, `features.updates`); idempotent producer (ingestion); duplicate-safe apply via per-partition watermarks in one atomic Lua script (ADR-003); recovery seeks to the Redis watermark, and the committed offset stays for lag |
 | Resilience patterns | Timeout management + bounded retries (gateway); graceful degradation with explicit feature statuses (ADR-013); 503+Retry-After backpressure (ADR-006); freshness heartbeat separating "no traffic" from "writer down" |
 | Observability (partial) | Correlation ids end-to-end, structured JSON logs, health/ready with per-dependency detail; Prometheus metrics on METRICS_PORT (ADR-014) |

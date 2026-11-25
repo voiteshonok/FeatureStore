@@ -34,5 +34,6 @@ twice when a send is retried after a timeout.
 ## Consequences
 
 - Redelivery after a restart is harmless, which directly supports NFR-5.
+- The read position is restored from the Redis watermark; the committed offset is only for monitoring.
 - The Lua script is the single write path to Redis and must stay small and tested.
 - A rebuild (K5) resets the watermarks before replaying the log from the beginning.

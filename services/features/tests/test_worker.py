@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 
 import pytest
+from aiokafka.structs import TopicPartition
 from fakeredis import FakeAsyncRedis
 from prometheus_client import CollectorRegistry
 from redis.exceptions import ConnectionError as RedisConnectionError
@@ -19,7 +20,7 @@ from features.windows import (
     to_epoch_ms,
     watermark_key,
 )
-from features.worker import JsonFormatter, OnlineWriter, apply_event, load_script
+from features.worker import JsonFormatter, OnlineWriter, WatermarkSeek, apply_event, load_script
 from schemas import FeatureSnapshot
 
 NOW = to_epoch_ms(BASE)
@@ -64,6 +65,8 @@ class FakeConsumer:
         self.ends = ends or {}
         self.commits: list[dict[object, int]] = []
         self.commit_failures = 0
+        self.committed_offsets: dict[object, int | None] = {}
+        self.seeks: list[tuple[object, int]] = []
 
     def assignment(self) -> set[Partition]:
         return self._assignment
@@ -80,6 +83,12 @@ class FakeConsumer:
             raise ConnectionError("commit down")
         self.commits.append(offsets)
 
+    async def committed(self, tp: object) -> int | None:
+        return self.committed_offsets.get(tp)
+
+    def seek(self, tp: object, offset: int) -> None:
+        self.seeks.append((tp, offset))
+
 
 class FakeProducer:
     def __init__(self) -> None:
@@ -91,6 +100,23 @@ class FakeProducer:
             self.failures -= 1
             raise OSError("broker down")
         self.sent.append((topic, value, key))
+
+
+class FlakyHget:
+    """Fail the first ``hget`` calls, then pass through."""
+
+    def __init__(self, inner: FakeAsyncRedis, failures: int) -> None:
+        self._inner = inner
+        self._failures = failures
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._inner, name)
+
+    async def hget(self, key: str, field: str) -> object:
+        if self._failures:
+            self._failures -= 1
+            raise RedisConnectionError("down")
+        return await self._inner.hget(key, field)
 
 
 class FlakyRedis:
@@ -431,3 +457,68 @@ async def test_applied_latency_is_bucketed_and_a_duplicate_is_not() -> None:
 
     assert writer.counters.dup == 1
     assert registry.get_sample_value("features_event_to_online_seconds_count") == 1
+
+
+def _rewind_total(metrics: WorkerMetrics) -> float:
+    value = metrics.registry.get_sample_value("features_worker_rewind_events_total")
+    return 0.0 if value is None else value
+
+
+async def test_watermark_seek_starts_after_the_stored_offset(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    redis = FakeAsyncRedis(decode_responses=True)
+    await redis.hset(watermark_key(0), "offset", "6")
+    tp = TopicPartition(TOPIC, 0)
+    consumer = FakeConsumer()
+    consumer.committed_offsets[tp] = 10
+    metrics = worker_metrics(CollectorRegistry())
+    writer = _writer(redis, consumer, metrics=metrics)
+    caplog.set_level(logging.INFO, logger="features")
+
+    await WatermarkSeek(writer).on_partitions_assigned({tp})
+
+    assert consumer.seeks == [(tp, 7)]
+    assert _rewind_total(metrics) == 3
+    record = next(item for item in caplog.records if item.message == "partition assigned")
+    payload = json.loads(JsonFormatter().format(record))
+    assert payload["partition"] == 0
+    assert payload["committed"] == 10
+    assert payload["watermark"] == 6
+    assert payload["seek_to"] == 7
+
+
+async def test_watermark_seek_leaves_committed_when_watermark_is_missing() -> None:
+    redis = FakeAsyncRedis(decode_responses=True)
+    tp = TopicPartition(TOPIC, 0)
+    consumer = FakeConsumer()
+    consumer.committed_offsets[tp] = 10
+    metrics = worker_metrics(CollectorRegistry())
+    writer = _writer(redis, consumer, metrics=metrics)
+
+    await WatermarkSeek(writer).on_partitions_assigned({tp})
+
+    assert consumer.seeks == []
+    assert _rewind_total(metrics) == 0.0
+
+
+async def test_watermark_seek_retries_redis_then_seeks() -> None:
+    inner = FakeAsyncRedis(decode_responses=True)
+    await inner.hset(watermark_key(0), "offset", "6")
+    redis = FlakyHget(inner, failures=1)
+    tp = TopicPartition(TOPIC, 0)
+    consumer = FakeConsumer()
+    consumer.committed_offsets[tp] = 10
+    slept: list[float] = []
+
+    async def sleep(seconds: float) -> None:
+        slept.append(seconds)
+
+    metrics = worker_metrics(CollectorRegistry())
+    writer = _writer(redis, consumer, sleep=sleep, metrics=metrics)
+
+    await WatermarkSeek(writer).on_partitions_assigned({tp})
+
+    assert slept == [0.5]
+    assert consumer.seeks == [(tp, 7)]
+    assert _rewind_total(metrics) == 3.0

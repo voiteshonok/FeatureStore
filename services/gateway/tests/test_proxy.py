@@ -21,11 +21,11 @@ def _failing(error: type[httpx.TransportError]) -> tuple[list[int], object]:
     ("method", "path", "detail", "attempts", "sleeps", "session"),
     [
         ("GET", "/v1/alerts?status=open", "detection unavailable", 3, [0.1, 0.4], True),
-        ("POST", "/v1/features", "features unavailable", 1, [], False),
+        ("POST", "/v1/features", "features unavailable", 2, [0.05], False),
         ("PATCH", "/v1/alerts/not-a-uuid", "detection unavailable", 1, [], True),
     ],
 )
-async def test_transport_failures_retry_only_get(
+async def test_connect_error_retry_policy(
     monkeypatch: pytest.MonkeyPatch,
     method: str,
     path: str,
@@ -92,6 +92,82 @@ async def test_get_succeeds_on_the_second_attempt(monkeypatch: pytest.MonkeyPatc
     assert recorded == [0.1]
     assert response.status_code == 200
     assert response.json() == {"alerts": []}
+
+
+async def test_post_features_succeeds_after_connect_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorded: list[float] = []
+    calls = {"n": 0}
+
+    async def fake_pause(seconds: float) -> None:
+        recorded.append(seconds)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise httpx.ConnectError("down", request=request)
+        return httpx.Response(200, json={"ok": True})
+
+    monkeypatch.setattr("gateway.proxy.pause", fake_pause)
+    gateway = await mount(handler)
+    try:
+        response = await send(gateway.app, "POST", "/v1/features", content=b"{}")
+    finally:
+        await gateway.aclose()
+    assert calls["n"] == 2
+    assert recorded == [0.05]
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+
+
+async def test_post_features_read_timeout_is_not_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorded: list[float] = []
+
+    async def fake_pause(seconds: float) -> None:
+        recorded.append(seconds)
+
+    calls, handler = _failing(httpx.ReadTimeout)
+    monkeypatch.setattr("gateway.proxy.pause", fake_pause)
+    gateway = await mount(handler)  # type: ignore[arg-type]
+    try:
+        response = await send(gateway.app, "POST", "/v1/features", content=b"{}")
+    finally:
+        await gateway.aclose()
+    assert calls["n"] == 1
+    assert recorded == []
+    assert response.status_code == 504
+    assert response.json()["type"] == "upstream_timeout"
+    assert response.json()["title"] == "features timeout"
+
+
+async def test_patch_read_timeout_is_not_retried(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorded: list[float] = []
+
+    async def fake_pause(seconds: float) -> None:
+        recorded.append(seconds)
+
+    calls, handler = _failing(httpx.ReadTimeout)
+    monkeypatch.setattr("gateway.proxy.pause", fake_pause)
+    gateway = await mount(handler)  # type: ignore[arg-type]
+    try:
+        response = await send(
+            gateway.app,
+            "PATCH",
+            "/v1/alerts/not-a-uuid",
+            api_key=None,
+            content=b"{}",
+            headers=operator_headers(csrf=True),
+        )
+    finally:
+        await gateway.aclose()
+    assert calls["n"] == 1
+    assert recorded == []
+    assert response.status_code == 504
+    assert response.json()["type"] == "upstream_timeout"
+    assert response.json()["title"] == "detection timeout"
 
 
 @pytest.mark.parametrize(

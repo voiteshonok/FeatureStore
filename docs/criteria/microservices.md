@@ -61,7 +61,7 @@ service.
 | 7 | Loose coupling; services work independently | ✅ | Kafka backbone; no sync calls between business services; windows rebuild from replay |
 | 8 | No shared database (or justified) | ✅ | Schema-per-service + per-service credentials (infra/postgres, docs/db/data-dictionary.md) |
 | 9 | Sync: REST with versioned contracts | ✅ | `/v1/` on every API; gateway proxies only |
-| 10 | Timeouts and retry policies on all sync calls | ✅ | services/gateway proxy: connect/read timeouts, bounded retries for idempotent GET only |
+| 10 | Timeouts and retry policies on all sync calls | ✅ | services/gateway proxy: connect/read timeouts, bounded retries for idempotent GET, one connect retry for `POST /v1/features` |
 | 11 | Handling of unavailable dependencies | ✅ | ingestion: 503+Retry-After on Kafka outage (ADR-006, tested); gateway: upstream down → 503, no hang; worker pauses without committing offsets on Redis outage |
 | 12 | Rate limiting at the entry point | ✅ | gateway: slowapi per API key (`GATEWAY_RATE_LIMIT`), 429 + Retry-After |
 | 13 | Own codebase per service (monorepo ok) | ✅ | services/* as uv workspace packages |

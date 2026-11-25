@@ -90,7 +90,8 @@ ADR-006).
 
 Only two sync hops exist — `gateway → features` and `gateway → detection` — so no
 call chain exceeds 2 services. Every sync call carries: connect/read timeouts,
-bounded retries with exponential backoff (idempotent GETs only), and a mapped
+bounded retries with exponential backoff (idempotent GETs, plus one connect
+retry for `POST /v1/features`), and a mapped
 `503`/`504` when the dependency is down (graceful degradation: the dashboard shows
 "features unavailable", partial results where possible). APIs are versioned under
 `/v1/`; OpenAPI specs are exported to [openapi/](openapi/). Contract changes are

@@ -416,9 +416,21 @@ async def _ready(request: Request) -> JSONResponse:
     return JSONResponse(status_code=200 if ready_ok else 503, content=body)
 
 
-async def _proxy(request: Request, base_url: str, service: str) -> Response:
+async def _proxy(
+    request: Request,
+    base_url: str,
+    service: str,
+    *,
+    retry_on_connect: bool = False,
+) -> Response:
     client: httpx.AsyncClient = request.app.state.client
-    return await forward(client, request, base_url=base_url, service=service)
+    return await forward(
+        client,
+        request,
+        base_url=base_url,
+        service=service,
+        retry_on_connect=retry_on_connect,
+    )
 
 
 async def _catalog(request: Request) -> Response:
@@ -624,7 +636,12 @@ def _install_routes(app: FastAPI, limiter: Limiter, rate: str) -> None:
     @limited
     async def post_features(request: Request) -> Response:
         settings: Settings = request.app.state.settings
-        return await _proxy(request, settings.features_url, "features")
+        return await _proxy(
+            request,
+            settings.features_url,
+            "features",
+            retry_on_connect=True,
+        )
 
     @app.get(
         "/v1/alerts",

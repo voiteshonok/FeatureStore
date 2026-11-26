@@ -18,7 +18,7 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --locked
-      - run: make secret up topics test-e2e
+      - run: make secret up topics baseline-up test-e2e
       - name: Runnable guides
         run: |
           bash docs/guides/scripts/getting-started.sh

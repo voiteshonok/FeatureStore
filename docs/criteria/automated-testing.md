@@ -102,8 +102,8 @@ make test                      # pytest -m "not integration and not e2e" with co
 make test-int                  # pytest -m integration (CI adds --no-cov: the 70% gate applies to the unit run)
 
 # Full stack: e2e (Docker Compose)
-make secret up topics          # once per clean checkout
-make test-e2e                  # pytest -m e2e against the running stack
+make secret up topics baseline-up  # once per clean checkout
+make test-e2e                      # pytest -m e2e against the running stack
 
 # Dashboard
 cd dashboard
@@ -183,7 +183,7 @@ Static checks run with the same commands as CI: `make lint typecheck audit`,
 | `test` | unit tests with coverage gate 70% | every PR |
 | `integration` | testcontainers suite incl. Hypothesis property | every PR |
 | `dashboard` | ESLint, Prettier, `tsc`, generated types current, Vitest with coverage gate 70%, build, `npm audit --audit-level=high`, image build | every PR |
-| `e2e` → `stage2` | `make secret up topics test-e2e`, k6 smoke | nightly 03:00 UTC, manual |
+| `e2e` → `stage2` | `make secret up topics baseline-up test-e2e`, k6 smoke | nightly 03:00 UTC, manual |
 | `e2e` → `dashboard` | Playwright against the stack, traces uploaded on failure | after `stage2` |
 
 ## Defects found by tests

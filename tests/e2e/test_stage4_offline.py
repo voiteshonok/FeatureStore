@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 import subprocess
 import time
 from datetime import UTC, datetime
@@ -108,18 +109,54 @@ async def _read_raw_events() -> list[TransactionEvent]:
         await consumer.stop()
 
 
+def _offline_password() -> str:
+    password = os.environ.get("SVC_OFFLINE_PASSWORD")
+    if not password:
+        pytest.fail("SVC_OFFLINE_PASSWORD is unset; run make secret")
+    return password
+
+
+def _clickhouse_database() -> str:
+    database = os.environ.get("CLICKHOUSE_DB", "featurestore")
+    if not database.isidentifier():
+        pytest.fail(f"invalid ClickHouse database name: {database!r}")
+    return database
+
+
+def _clickhouse_client(
+    *,
+    connect_timeout: int | None = None,
+    send_receive_timeout: int | None = None,
+) -> clickhouse_connect.driver.Client:
+    password = _offline_password()
+    database = _clickhouse_database()
+    if connect_timeout is None and send_receive_timeout is None:
+        return clickhouse_connect.get_client(
+            host="127.0.0.1",
+            port=8123,
+            username="svc_offline",
+            password=password,
+            database=database,
+        )
+    return clickhouse_connect.get_client(
+        host="127.0.0.1",
+        port=8123,
+        username="svc_offline",
+        password=password,
+        database=database,
+        connect_timeout=10 if connect_timeout is None else connect_timeout,
+        send_receive_timeout=300 if send_receive_timeout is None else send_receive_timeout,
+    )
+
+
 async def _wait_clickhouse_ready(*, timeout_s: float = 60) -> None:
+    # Fail before the poll. The loop treats connection errors as "not ready".
+    _offline_password()
+    _clickhouse_database()
+
     async def ready() -> bool:
         try:
-            client = clickhouse_connect.get_client(
-                host="127.0.0.1",
-                port=8123,
-                username="featurestore",
-                password="featurestore",  # noqa: S106
-                database="featurestore",
-                connect_timeout=2,
-                send_receive_timeout=2,
-            )
+            client = _clickhouse_client(connect_timeout=2, send_receive_timeout=2)
             try:
                 client.query("SELECT 1")
             finally:
@@ -157,15 +194,11 @@ async def _wait_offline_caught_up(*, timeout_s: float = 60) -> None:
 
 
 def _ch_event_ids() -> set[UUID]:
-    client = clickhouse_connect.get_client(
-        host="127.0.0.1",
-        port=8123,
-        username="featurestore",
-        password="featurestore",  # noqa: S106
-        database="featurestore",
-    )
+    database = _clickhouse_database()
+    client = _clickhouse_client()
     try:
-        rows = client.query("SELECT event_id FROM featurestore.events FINAL").result_rows
+        # database is an identifier from the environment, same check as pan_scan.
+        rows = client.query(f"SELECT event_id FROM {database}.events FINAL").result_rows  # noqa: S608
         found: set[UUID] = set()
         for row in rows:
             value = row[0]

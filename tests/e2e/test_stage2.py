@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+import os
 import time
 from collections import Counter
 from collections.abc import AsyncIterator
@@ -165,6 +166,27 @@ async def _record(posts: list[_Posted], response: httpx.Response) -> None:
     posts.append(_Posted(body, response.status_code, duplicate))
 
 
+_CLICKHOUSE_SCAN_ENV = ("CLICKHOUSE_USER", "CLICKHOUSE_PASSWORD")
+
+
+def _scan_stores() -> int:
+    """Scan as ``svc_offline``, without reading pytest's command line."""
+    saved = {name: os.environ.get(name) for name in _CLICKHOUSE_SCAN_ENV}
+    password = os.environ.get("SVC_OFFLINE_PASSWORD")
+    if not password:
+        pytest.fail("SVC_OFFLINE_PASSWORD is unset; run make secret")
+    os.environ["CLICKHOUSE_USER"] = "svc_offline"
+    os.environ["CLICKHOUSE_PASSWORD"] = password
+    try:
+        return scan_for_pans([])
+    finally:
+        for name, previous in saved.items():
+            if previous is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = previous
+
+
 async def test_stage2() -> None:
     """Accepted events land once, tokenized, and within a second of ingest."""
     await _require_ready()
@@ -243,7 +265,7 @@ async def test_stage2() -> None:
         pytest.fail("different cards mapped to the same token")
     if not any(count > 1 for count in uses_by_pan.values()):
         pytest.fail("no card was accepted more than once")
-    assert await asyncio.to_thread(scan_for_pans) == 0
+    assert await asyncio.to_thread(_scan_stores) == 0
 
     # US-1.3: one message per event id; a retry keeps the payment id.
     kafka_ids = [str(event.event_id) for event in events]

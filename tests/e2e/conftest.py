@@ -25,8 +25,16 @@ def _load_infra_env(path: Path) -> None:
         os.environ[key] = value
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session")
 def infra_env() -> None:
     if not _ENV_FILE.is_file():
         pytest.fail(f"{_ENV_FILE} is missing; run make secret")
     _load_infra_env(_ENV_FILE)
+
+
+@pytest.fixture(autouse=True)
+def _infra_env_for_e2e(request: pytest.FixtureRequest) -> None:
+    """The OpenAPI schema check in this folder runs with the unit suite."""
+    if request.node.get_closest_marker("e2e") is None:
+        return
+    request.getfixturevalue("infra_env")
